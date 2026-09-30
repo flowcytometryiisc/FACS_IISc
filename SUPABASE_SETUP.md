@@ -59,10 +59,12 @@ persistent `FLASK_SECRET_KEY`. Save the settings and redeploy the service.
 Run the SQL migration in that same Supabase project before using bookings. After
 the deployment is live, `https://<your-service>.onrender.com/api/health`
 should return HTTP 200 with status `ok` and persistence `supabase`, and
-`/api/calendar?month=YYYY-MM` should return HTTP 200. A calendar failure caused
-by incomplete persistence configuration is reported as HTTP 503; Brown Bear
-events are fetched live, while portal bookings are read from Supabase. Website
-bookings are not written back to Brown Bear.
+`/api/calendar?month=YYYY-MM` should return HTTP 200. Brown Bear entries remain
+available from that calendar endpoint if persistence is temporarily
+misconfigured; its `portalBookingsAvailable` field will be `false` and the
+website will indicate that portal bookings are missing. The health check,
+booking availability and booking submissions still require working Supabase
+configuration. Website bookings are not written back to Brown Bear.
 
 The existing admin login uses one server-configured password. For a public
 production deployment, restrict staff access at the hosting layer or plan a

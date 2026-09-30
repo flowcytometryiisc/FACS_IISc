@@ -238,7 +238,10 @@ if (calendarBrowser) {
     const updated = lastUpdated
       ? ` · Updated ${new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(new Date(lastUpdated))}`
       : "";
-    scheduleStatus.textContent = `${dayEvents.length} ${dayEvents.length === 1 ? "booking" : "bookings"} listed · India Standard Time${updated}`;
+    const bookingAvailabilityNotice = calendarBrowser.dataset.portalBookingsAvailable === "false"
+      ? " · Website bookings temporarily unavailable"
+      : "";
+    scheduleStatus.textContent = `${dayEvents.length} ${dayEvents.length === 1 ? "booking" : "bookings"} listed · India Standard Time${updated}${bookingAvailabilityNotice}`;
 
     if (!dayEvents.length) {
       eventsContainer.innerHTML = '<div class="calendar-empty">No sessions are listed for this day in the facility calendar.</div>';
@@ -287,6 +290,7 @@ if (calendarBrowser) {
       scheduleEvents = payload.events;
       lastUpdated = payload.fetchedAt || "";
       scheduleError = "";
+      calendarBrowser.dataset.portalBookingsAvailable = String(payload.portalBookingsAvailable !== false);
       updateCalendarDateIndicators();
       renderSchedule();
     } catch (error) {

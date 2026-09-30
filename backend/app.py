@@ -1230,13 +1230,20 @@ def get_calendar():
     except BrownBearCalendarError as error:
         return jsonify({"error": str(error)}), 502
 
-    connection = booking_connection()
+    portal_bookings_available = True
     try:
-        rows = connection.execute(
-            "SELECT slots FROM bookings WHERE status = 'confirmed'"
-        ).fetchall()
-    finally:
-        connection.close()
+        connection = booking_connection()
+        try:
+            rows = connection.execute(
+                "SELECT slots FROM bookings WHERE status = 'confirmed'"
+            ).fetchall()
+        finally:
+            connection.close()
+    except (BookingConfigurationError, BookingDatabaseError, sqlite3.Error):
+        app.logger.exception("Unable to load portal bookings for the facility calendar")
+        rows = []
+        portal_bookings_available = False
+
     instrument_colors = {
         item["name"]: item.get("color", "gray") for item in load_json("instruments.json")
     }
@@ -1257,6 +1264,11 @@ def get_calendar():
         "fetchedAt": datetime.now(timezone.utc).isoformat(),
         "source": CALENDAR_URL,
         "events": events,
+        "portalBookingsAvailable": portal_bookings_available,
+        "portalBookingsWarning": (
+            None if portal_bookings_available
+            else "Website bookings are temporarily unavailable; only Brown Bear events are shown."
+        ),
     })
     result.headers["Cache-Control"] = "no-store"
     return result

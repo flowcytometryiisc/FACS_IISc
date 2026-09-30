@@ -521,33 +521,54 @@ class BookingApiTests(unittest.TestCase):
             with self.assertRaises(facility_app.BookingConfigurationError):
                 facility_app.booking_connection()
 
-    def test_calendar_reports_unconfigured_supabase_persistence_as_unavailable(self):
+    def test_calendar_shows_brown_bear_when_supabase_persistence_is_unconfigured(self):
+        event = {
+            "date": "2026-09-30",
+            "time": "09:00 AM - 10:00 AM",
+            "title": "Research A",
+            "instrument": "CytoFLEX LX",
+            "color": "purple",
+        }
         with patch.dict(
             os.environ,
             {"APP_ENV": "production", "DATABASE_URL": "postgresql://example"},
             clear=True,
-        ):
+        ), patch.object(facility_app, "fetch_brown_bear_month", return_value=[event]):
             response = self.client.get("/api/calendar?month=2026-09")
 
-        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
         self.assertEqual(
-            response.get_json(),
-            {"error": "The facility booking service is temporarily unavailable."},
+            payload["events"][0],
+            {**event, "source": "calendar"},
         )
+        self.assertFalse(payload["portalBookingsAvailable"])
+        self.assertIn("only Brown Bear events are shown", payload["portalBookingsWarning"])
 
-    def test_calendar_reports_database_connection_failure_as_unavailable(self):
+    def test_calendar_reports_portal_booking_data_unavailable_on_database_failure(self):
+        event = {
+            "date": "2026-09-30",
+            "time": "09:00 AM - 10:00 AM",
+            "title": "Research A",
+            "instrument": "CytoFLEX LX",
+            "color": "purple",
+        }
         with patch.object(
+            facility_app, "fetch_brown_bear_month", return_value=[event]
+        ), patch.object(
             facility_app,
             "booking_connection",
             side_effect=facility_app.BookingDatabaseError,
         ):
             response = self.client.get("/api/calendar?month=2026-09")
 
-        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
         self.assertEqual(
-            response.get_json(),
-            {"error": "The facility booking service is temporarily unavailable."},
+            [item["title"] for item in payload["events"]],
+            ["Research A"],
         )
+        self.assertFalse(payload["portalBookingsAvailable"])
 
     def test_booking_rejects_weekend_sessions(self):
         saturday = facility_app.facility_today()
