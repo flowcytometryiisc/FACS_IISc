@@ -1,0 +1,1264 @@
+import io
+import hmac
+import json
+import os
+import re
+import secrets
+import sqlite3
+from datetime import date, datetime, timedelta, timezone
+from email.utils import parseaddr
+from html.parser import HTMLParser
+from pathlib import Path, PureWindowsPath
+from urllib.parse import quote
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+from flask import Flask, has_request_context, jsonify, request, send_file, send_from_directory, session
+from flask_cors import CORS
+from werkzeug.utils import secure_filename
+
+BASE = Path(__file__).resolve().parents[1]
+CALENDAR_URL = "https://www.brownbearsw.com/cal/flow_cytometry"
+app = Flask(__name__)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
+app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("BOOKING_COOKIE_SECURE", "").lower() == "true"
+CORS(app)
+
+BOOKING_DATABASE = BASE / "backend" / "instance" / "bookings.sqlite3"
+BOOKING_UPLOADS = BASE / "backend" / "instance" / "booking-forms"
+SUPABASE_STORAGE_BUCKET = os.environ.get("SUPABASE_STORAGE_BUCKET", "booking-forms")
+BOOKING_SLOTS = ("09:00-11:00", "11:00-13:00", "14:00-16:00", "16:00-18:00", "18:00-20:00")
+BOOKING_WEEKDAYS = {0, 1, 2, 3, 4}
+SPECIMEN_TYPES = (
+    "Cell suspension",
+    "Primary cells",
+    "Cell line",
+    "Tissue-derived cells",
+    "Other",
+)
+BROWN_BEAR_INSTRUMENT_CLASSES = {
+    "c_CYTOFLEX": "CytoFLEX LX",
+    "c_SYMPHONY": "Symphony A1",
+    "c_ARIA": "FACSAria™ Fusion",
+    "c_DISCOVER": "Discover S8 Spectral Flow Cytometer",
+}
+
+
+def facility_today():
+    return facility_now().date()
+
+
+def facility_now():
+    return datetime.now(timezone(timedelta(hours=5, minutes=30)))
+
+
+def slot_has_started(slot, now=None):
+    current = now or facility_now()
+    slot_date = date.fromisoformat(slot["date"])
+    start_time = slot["time"].split("-", 1)[0]
+    return slot_date < current.date() or (
+        slot_date == current.date() and start_time <= current.strftime("%H:%M")
+    )
+
+
+def booking_connection():
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url:
+        try:
+            import psycopg
+            from psycopg.rows import dict_row
+            from psycopg.types.json import Jsonb
+        except ImportError as error:
+            raise BookingConfigurationError(
+                "Install backend requirements to use the Supabase PostgreSQL database."
+            ) from error
+        if not os.environ.get("SUPABASE_URL") or not os.environ.get("SUPABASE_SERVICE_ROLE_KEY"):
+            raise BookingConfigurationError(
+                "Supabase persistence requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY."
+            )
+        if not os.environ.get("FLASK_SECRET_KEY"):
+            raise BookingConfigurationError(
+                "Set a persistent FLASK_SECRET_KEY before connecting to Supabase."
+            )
+        try:
+            connection = psycopg.connect(
+                database_url,
+                connect_timeout=10,
+                row_factory=dict_row,
+            )
+        except psycopg.Error as error:
+            raise BookingDatabaseError from error
+        actor = "admin" if has_request_context() and session.get("booking_admin") else "public"
+        return PostgresBookingConnection(connection, Jsonb, psycopg.Error, actor)
+
+    if os.environ.get("APP_ENV", "").lower() == "production":
+        raise BookingConfigurationError(
+            "Set DATABASE_URL in production; SQLite is only for local development."
+        )
+    BOOKING_DATABASE.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(BOOKING_DATABASE, timeout=10)
+    connection.row_factory = sqlite3.Row
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS bookings (
+            id TEXT PRIMARY KEY,
+            created_at TEXT NOT NULL,
+            user_name TEXT NOT NULL,
+            pi_name TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            email TEXT NOT NULL,
+            department TEXT NOT NULL,
+            specimen TEXT NOT NULL,
+            notes TEXT NOT NULL,
+            slots TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('confirmed', 'cancelled')),
+            form_name TEXT NOT NULL,
+            form_path TEXT NOT NULL
+        )
+    """)
+    return connection
+
+
+class PostgresBookingConnection:
+    def __init__(self, connection, jsonb_type, database_error_type, actor):
+        self.connection = connection
+        self.jsonb_type = jsonb_type
+        self.database_error_type = database_error_type
+        self.actor = actor
+
+    def execute(self, statement, parameters=()):
+        begins_transaction = "BEGIN IMMEDIATE" in statement
+        statement = statement.replace("BEGIN IMMEDIATE", "BEGIN")
+        values = list(parameters)
+        if "INSERT INTO bookings" in statement and len(values) > 9:
+            values[9] = self.jsonb_type(json.loads(values[9]))
+        elif "UPDATE bookings SET slots" in statement and values:
+            values[0] = self.jsonb_type(json.loads(values[0]))
+        try:
+            cursor = self.connection.execute(statement.replace("?", "%s"), values)
+            if begins_transaction:
+                self.connection.execute(
+                    "SELECT set_config('app.actor', %s, true)",
+                    (self.actor,),
+                )
+            return cursor
+        except self.database_error_type as error:
+            if getattr(error, "sqlstate", None) == "23P01":
+                raise BookingSlotConflict from error
+            raise BookingDatabaseError from error
+
+    def commit(self):
+        try:
+            self.connection.commit()
+        except self.database_error_type as error:
+            if getattr(error, "sqlstate", None) == "23P01":
+                raise BookingSlotConflict from error
+            raise BookingDatabaseError from error
+
+    def rollback(self):
+        self.connection.rollback()
+
+    def close(self):
+        self.connection.close()
+
+
+class BookingSlotConflict(Exception):
+    pass
+
+
+class BookingConfigurationError(Exception):
+    pass
+
+
+class BookingDatabaseError(Exception):
+    pass
+
+
+class SupabaseStorageError(Exception):
+    pass
+
+
+def use_supabase_storage():
+    return bool(os.environ.get("DATABASE_URL"))
+
+
+def supabase_storage_request(method, object_key, content=None, content_type=None, upsert=False):
+    supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    if not supabase_url or not service_key:
+        raise SupabaseStorageError(
+            "Supabase Storage requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY."
+        )
+    encoded_key = quote(object_key, safe="/")
+    if method == "DELETE":
+        endpoint = f"{supabase_url}/storage/v1/object/{quote(SUPABASE_STORAGE_BUCKET, safe='')}"
+        body = json.dumps({"prefixes": [object_key]}).encode("utf-8")
+        request_type = "application/json"
+    else:
+        endpoint = (
+            f"{supabase_url}/storage/v1/object/"
+            f"{quote(SUPABASE_STORAGE_BUCKET, safe='')}/{encoded_key}"
+        )
+        body = content
+        request_type = content_type or "application/octet-stream"
+    storage_request = Request(
+        endpoint,
+        data=body,
+        method=method,
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Content-Type": request_type,
+            "x-upsert": "true" if upsert else "false",
+        },
+    )
+    try:
+        with urlopen(storage_request, timeout=20) as response:
+            return response.read()
+    except (HTTPError, URLError, TimeoutError, OSError) as error:
+        app.logger.exception("Supabase Storage request failed")
+        raise SupabaseStorageError(
+            "The uploaded facility form could not be stored or retrieved."
+        ) from error
+
+
+def store_booking_form(object_key, content):
+    if use_supabase_storage():
+        supabase_storage_request("POST", object_key, content, "application/pdf")
+        return object_key
+    BOOKING_UPLOADS.mkdir(parents=True, exist_ok=True)
+    local_path = BOOKING_UPLOADS / object_key
+    local_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        local_path.write_bytes(content)
+    except OSError:
+        if local_path.exists():
+            local_path.unlink()
+        raise
+    return str(local_path)
+
+
+def remove_booking_form(form_path):
+    if not form_path:
+        return True
+    if use_supabase_storage():
+        try:
+            supabase_storage_request("DELETE", form_path)
+        except SupabaseStorageError:
+            return False
+        return True
+    local_path = Path(form_path).resolve()
+    if not local_path.is_file():
+        return True
+    if local_path.parent != BOOKING_UPLOADS.resolve():
+        app.logger.error("Refusing to delete a stored user form outside the upload directory")
+        return False
+    try:
+        local_path.unlink()
+    except OSError:
+        app.logger.exception("Unable to remove the deleted booking's uploaded form")
+        return False
+    return True
+
+
+def read_booking_form(form_path):
+    if use_supabase_storage():
+        return supabase_storage_request("GET", form_path)
+    local_path = Path(form_path).resolve()
+    if local_path.parent != BOOKING_UPLOADS.resolve() or not local_path.is_file():
+        app.logger.error("Stored user form is missing or outside the upload directory")
+        return None
+    return local_path.read_bytes()
+
+
+def slots_from_row(row):
+    value = row["slots"]
+    return json.loads(value) if isinstance(value, str) else value
+
+
+def booking_row(row):
+    instrument_colors = {
+        instrument["name"]: instrument.get("color", "gray")
+        for instrument in load_json("instruments.json")
+    }
+    slots = slots_from_row(row)
+    for slot in slots:
+        slot.setdefault("color", instrument_colors.get(slot["instrument"], "gray"))
+    return {
+        "id": row["id"],
+        "createdAt": row["created_at"],
+        "userName": row["user_name"],
+        "piName": row["pi_name"],
+        "phone": row["phone"],
+        "email": row["email"],
+        "department": row["department"],
+        "specimen": row["specimen"],
+        "notes": row["notes"],
+        "slots": slots,
+        "status": row["status"],
+        "formName": row["form_name"],
+        "hasForm": bool(row["form_path"]),
+    }
+
+
+def require_admin():
+    if not session.get("booking_admin"):
+        return jsonify({"error": "Admin sign-in is required."}), 401
+    return None
+
+
+class BrownBearCalendarError(Exception):
+    pass
+
+
+def fetch_brown_bear_month(month):
+    url = f"{CALENDAR_URL}?Date={month}-01;Op=ShowIt"
+    feed_request = Request(
+        url,
+        headers={
+            "Accept": "text/html",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 Chrome/128 Safari/537.36"
+            ),
+        },
+    )
+    try:
+        with urlopen(feed_request, timeout=12) as response:
+            charset = response.headers.get_content_charset() or "utf-8"
+            html = response.read().decode(charset, errors="replace")
+    except (HTTPError, URLError, TimeoutError, OSError) as error:
+        app.logger.exception("Unable to retrieve the Brown Bear calendar")
+        raise BrownBearCalendarError(
+            "The live Brown Bear calendar could not be reached. Please try again."
+        ) from error
+
+    parser = BrownBearCalendarParser()
+    parser.feed(html)
+    if not parser.header_cells or not parser.day_row_count:
+        app.logger.error("Brown Bear response did not contain a monthly calendar")
+        raise BrownBearCalendarError(
+            "Brown Bear did not return the requested monthly calendar."
+        )
+    instrument_colors = {
+        instrument["name"]: instrument.get("color", "gray")
+        for instrument in load_json("instruments.json")
+    }
+    return [
+        {**event, "color": instrument_colors.get(event["instrument"], "neutral")}
+        for event in parser.events
+    ]
+
+
+def brown_bear_events_between(start_date, end_date):
+    events = []
+    month = start_date.replace(day=1)
+    final_month = end_date.replace(day=1)
+    while month <= final_month:
+        month_key = month.strftime("%Y-%m")
+        events.extend(
+            event for event in fetch_brown_bear_month(month_key)
+            if start_date.isoformat() <= event["date"] <= end_date.isoformat()
+        )
+        month = (month.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return events
+
+
+def event_time_range(time_text):
+    parts = re.split(r"\s*[-\u2012-\u2015\u2212]\s*", time_text.strip(), maxsplit=1)
+    if len(parts) != 2:
+        return None
+
+    def parse_time(value):
+        match = re.fullmatch(r"(\d{1,2})(?::(\d{2}))?\s*([AP]M)?", value.strip(), re.IGNORECASE)
+        if not match:
+            return None
+        hour = int(match.group(1))
+        minute = int(match.group(2) or "0")
+        marker = (match.group(3) or "").upper()
+        if minute > 59 or hour > (12 if marker else 23) or hour < (1 if marker else 0):
+            return None
+        if marker:
+            hour %= 12
+            if marker == "PM":
+                hour += 12
+        return hour * 60 + minute, marker
+
+    start = parse_time(parts[0])
+    end = parse_time(parts[1])
+    if start is None or end is None:
+        return None
+    start_minutes, start_marker = start
+    end_minutes, end_marker = end
+    if start_marker and not end_marker and end_minutes < start_minutes:
+        end_minutes += 12 * 60
+    if end_minutes <= start_minutes:
+        return None
+    return start_minutes, end_minutes
+
+
+def brown_bear_booked_slots(events, instruments):
+    instrument_records = {item["name"]: item for item in instruments}
+    booked_slots = []
+    for event in events:
+        event_range = event_time_range(event.get("time", ""))
+        if event_range is None:
+            event_range = (0, 24 * 60)
+        event_start, event_end = event_range
+        instrument_name = event.get("instrument", "")
+        if instrument_name in instrument_records:
+            affected_instruments = [instrument_records[instrument_name]]
+        else:
+            affected_instruments = list(instruments)
+        for slot_time in BOOKING_SLOTS:
+            slot_start, slot_end = (
+                int(part[:2]) * 60 + int(part[3:])
+                for part in slot_time.split("-")
+            )
+            if slot_start >= event_end or event_start >= slot_end:
+                continue
+            for instrument in affected_instruments:
+                booked_slots.append({
+                    "instrument": instrument["name"],
+                    "date": event["date"],
+                    "time": slot_time,
+                    "color": instrument.get("color", "gray"),
+                    "source": "calendar",
+                    "title": event.get("title", "Facility calendar booking"),
+                })
+    return booked_slots
+
+
+@app.errorhandler(413)
+def booking_upload_too_large(_error):
+    return jsonify({"error": "The uploaded user form must be smaller than 10 MB."}), 413
+
+
+@app.get("/api/booking-availability")
+def get_booking_availability():
+    start = request.args.get("start", "")
+    end = request.args.get("end", "")
+    try:
+        start_date = date.fromisoformat(start)
+        end_date = date.fromisoformat(end)
+    except ValueError:
+        return jsonify({"error": "Provide a valid start and end date as YYYY-MM-DD."}), 400
+    if end_date < start_date or (end_date - start_date).days > 31:
+        return jsonify({"error": "The requested date range must be within 31 days."}), 400
+
+    try:
+        brown_bear_events = brown_bear_events_between(start_date, end_date)
+    except BrownBearCalendarError as error:
+        return jsonify({"error": str(error)}), 502
+
+    instruments = load_json("instruments.json")
+    booked_slots = brown_bear_booked_slots(brown_bear_events, instruments)
+    connection = booking_connection()
+    try:
+        rows = connection.execute(
+            "SELECT slots FROM bookings WHERE status = 'confirmed'"
+        ).fetchall()
+    finally:
+        connection.close()
+
+    unavailable_slots = []
+    now = facility_now()
+    for row in rows:
+        for slot in slots_from_row(row):
+            if start <= slot["date"] <= end:
+                booked_slots.append({
+                    **slot,
+                    "color": slot.get(
+                        "color",
+                        next(
+                            (item.get("color", "gray") for item in instruments
+                             if item["name"] == slot["instrument"]),
+                            "gray",
+                        ),
+                    ),
+                    "source": "portal",
+                    "title": "Portal booking",
+                })
+    current = now.date().isoformat()
+    for day_offset in range((end_date - start_date).days + 1):
+        slot_date = (start_date + timedelta(days=day_offset)).isoformat()
+        if slot_date != current:
+            continue
+        unavailable_slots.extend(
+            {"date": slot_date, "time": time}
+            for time in BOOKING_SLOTS
+            if time.split("-", 1)[0] <= now.strftime("%H:%M")
+        )
+    for day_offset in range((end_date - start_date).days + 1):
+        slot_date = start_date + timedelta(days=day_offset)
+        if slot_date.weekday() not in BOOKING_WEEKDAYS:
+            unavailable_slots.extend(
+                {"date": slot_date.isoformat(), "time": time}
+                for time in BOOKING_SLOTS
+            )
+    response = jsonify({
+        "start": start,
+        "end": end,
+        "booked": booked_slots,
+        "unavailable": unavailable_slots,
+    })
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.post("/api/bookings")
+def create_booking():
+    fields = {
+        "user_name": request.form.get("userName", "").strip(),
+        "pi_name": request.form.get("piName", "").strip(),
+        "phone": request.form.get("phone", "").strip(),
+        "email": request.form.get("email", "").strip().lower(),
+        "department": request.form.get("department", "").strip(),
+        "specimen": request.form.get("specimen", "").strip(),
+        "notes": request.form.get("notes", "").strip(),
+    }
+    required = ("user_name", "pi_name", "phone", "email", "specimen")
+    if any(not fields[key] for key in required):
+        return jsonify({"error": "Complete all required booking details."}), 400
+    limits = {
+        "user_name": 120,
+        "pi_name": 120,
+        "phone": 24,
+        "email": 254,
+        "department": 160,
+        "specimen": 80,
+        "notes": 1500,
+    }
+    if any(len(value) > limits[key] for key, value in fields.items()):
+        return jsonify({"error": "One or more booking fields exceed the allowed length."}), 400
+    digits = re.sub(r"\D", "", fields["phone"])
+    if not 10 <= len(digits) <= 15:
+        return jsonify({"error": "Enter a valid phone number with 10 to 15 digits."}), 400
+    if parseaddr(fields["email"])[1] != fields["email"] or not re.fullmatch(
+        r"[^@\s]+@[^@\s]+\.[^@\s]+", fields["email"]
+    ):
+        return jsonify({"error": "Enter a valid email address."}), 400
+    if fields["specimen"] not in SPECIMEN_TYPES:
+        return jsonify({"error": "Select a valid specimen type."}), 400
+
+    try:
+        slots = json.loads(request.form.get("slots", ""))
+    except json.JSONDecodeError:
+        return jsonify({"error": "Select at least one available session."}), 400
+    instrument_records = {
+        item["name"]: item for item in load_json("instruments.json")
+    }
+    instruments = set(instrument_records)
+    if not isinstance(slots, list) or not 1 <= len(slots) <= 12:
+        return jsonify({"error": "Select between 1 and 12 session slots."}), 400
+    normalized_slots = []
+    seen_slots = set()
+    for slot in slots:
+        if not isinstance(slot, dict):
+            return jsonify({"error": "A selected session is invalid."}), 400
+        instrument = slot.get("instrument")
+        slot_date = slot.get("date")
+        time = slot.get("time")
+        try:
+            parsed_date = date.fromisoformat(slot_date)
+        except (TypeError, ValueError):
+            return jsonify({"error": "A selected session has an invalid date."}), 400
+        if (
+            instrument not in instruments
+            or time not in BOOKING_SLOTS
+            or parsed_date.weekday() not in BOOKING_WEEKDAYS
+            or parsed_date < facility_today()
+            or parsed_date > facility_today() + timedelta(days=90)
+        ):
+            return jsonify({"error": "A selected session is no longer available."}), 400
+        normalized = {
+            "instrument": instrument,
+            "date": slot_date,
+            "time": time,
+            "color": instrument_records[instrument].get("color", "gray"),
+        }
+        if slot_has_started(normalized):
+            return jsonify({"error": "A selected session has already started. Choose a future time."}), 400
+        slot_key = (instrument, slot_date, time)
+        if slot_key in seen_slots:
+            return jsonify({"error": "Remove duplicate session slots before booking."}), 400
+        seen_slots.add(slot_key)
+        normalized_slots.append(normalized)
+
+    try:
+        booking_start = min(date.fromisoformat(slot["date"]) for slot in normalized_slots)
+        booking_end = max(date.fromisoformat(slot["date"]) for slot in normalized_slots)
+        calendar_events = brown_bear_events_between(booking_start, booking_end)
+    except BrownBearCalendarError as error:
+        return jsonify({"error": str(error)}), 502
+    calendar_booked = {
+        (slot["instrument"], slot["date"], slot["time"])
+        for slot in brown_bear_booked_slots(
+            calendar_events, list(instrument_records.values())
+        )
+    }
+    if any(
+        (slot["instrument"], slot["date"], slot["time"]) in calendar_booked
+        for slot in normalized_slots
+    ):
+        return jsonify({
+            "error": "One or more selected sessions are already booked in the facility calendar. Refresh availability."
+        }), 409
+
+    upload = request.files.get("userForm")
+    if upload is None or not upload.filename:
+        return jsonify({"error": "Attach the completed facility user form as a PDF."}), 400
+    original_name = secure_filename(PureWindowsPath(upload.filename).name)
+    if not original_name.lower().endswith(".pdf"):
+        return jsonify({"error": "The facility user form must be a PDF."}), 400
+    content = upload.stream.read(10 * 1024 * 1024 + 1)
+    if len(content) > 10 * 1024 * 1024:
+        return jsonify({"error": "The uploaded user form must be smaller than 10 MB."}), 413
+    if not content.startswith(b"%PDF-"):
+        return jsonify({"error": "The uploaded file is not a valid PDF document."}), 400
+
+    booking_id = f"FC-{facility_today():%y%m%d}-{secrets.token_hex(3).upper()}"
+    stored_form = f"{secrets.token_hex(16)}.pdf"
+    storage_key = f"{booking_id}/{stored_form}" if use_supabase_storage() else stored_form
+    form_path = ""
+    connection = None
+    try:
+        connection = booking_connection()
+        form_path = store_booking_form(storage_key, content)
+        connection.execute("BEGIN IMMEDIATE")
+        existing = connection.execute(
+            "SELECT slots FROM bookings WHERE status = 'confirmed'"
+        ).fetchall()
+        occupied = {
+            (item["instrument"], item["date"], item["time"])
+            for row in existing
+            for item in slots_from_row(row)
+        }
+        if any((item["instrument"], item["date"], item["time"]) in occupied for item in normalized_slots):
+            connection.rollback()
+            remove_booking_form(form_path)
+            return jsonify({"error": "One or more selected slots were just booked. Refresh availability."}), 409
+
+        connection.execute(
+            """INSERT INTO bookings (
+                id, created_at, user_name, pi_name, phone, email, department,
+                specimen, notes, slots, status, form_name, form_path
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?)""",
+            (
+                booking_id,
+                datetime.now(timezone.utc).isoformat(),
+                fields["user_name"],
+                fields["pi_name"],
+                fields["phone"],
+                fields["email"],
+                fields["department"],
+                fields["specimen"],
+                fields["notes"],
+                json.dumps(normalized_slots),
+                original_name,
+                str(form_path),
+            ),
+        )
+        connection.commit()
+    except (sqlite3.IntegrityError, BookingSlotConflict):
+        if connection:
+            connection.rollback()
+        remove_booking_form(form_path)
+        return jsonify({"error": "One or more selected slots were just booked. Refresh availability."}), 409
+    except SupabaseStorageError as error:
+        if connection:
+            connection.rollback()
+        remove_booking_form(form_path)
+        return jsonify({"error": str(error)}), 502
+    except BookingConfigurationError as error:
+        if connection:
+            connection.rollback()
+        remove_booking_form(form_path)
+        return jsonify({"error": str(error)}), 503
+    except OSError:
+        if connection:
+            connection.rollback()
+        remove_booking_form(form_path)
+        app.logger.exception("Unable to save the facility user form")
+        return jsonify({"error": "The booking could not be saved. Please try again."}), 500
+    except (sqlite3.Error, BookingDatabaseError):
+        if connection:
+            connection.rollback()
+        remove_booking_form(form_path)
+        app.logger.exception("Unable to save the facility booking")
+        return jsonify({"error": "The booking could not be saved. Please try again."}), 500
+    finally:
+        if connection:
+            connection.close()
+
+    return jsonify({"id": booking_id, "status": "confirmed", "slots": normalized_slots}), 201
+
+
+@app.get("/api/admin/session")
+def get_admin_session():
+    return jsonify({"authenticated": bool(session.get("booking_admin"))})
+
+
+@app.post("/api/admin/login")
+def admin_login():
+    password = os.environ.get("BOOKING_ADMIN_PASSWORD", "")
+    if not password:
+        return jsonify({"error": "Admin access is not configured. Set BOOKING_ADMIN_PASSWORD on the server."}), 503
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Submit the admin password as a JSON object."}), 400
+    submitted = payload.get("password", "")
+    if not isinstance(submitted, str) or not hmac.compare_digest(submitted, password):
+        return jsonify({"error": "The password is incorrect."}), 401
+    session["booking_admin"] = True
+    return jsonify({"authenticated": True})
+
+
+@app.post("/api/admin/logout")
+def admin_logout():
+    session.clear()
+    return jsonify({"authenticated": False})
+
+
+@app.get("/api/admin/bookings")
+def get_admin_bookings():
+    denied = require_admin()
+    if denied:
+        return denied
+    connection = booking_connection()
+    try:
+        rows = connection.execute(
+            "SELECT * FROM bookings ORDER BY created_at DESC"
+        ).fetchall()
+    finally:
+        connection.close()
+    response = jsonify({"bookings": [booking_row(row) for row in rows]})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/api/admin/calendar")
+def get_admin_calendar():
+    denied = require_admin()
+    if denied:
+        return denied
+    month = request.args.get("month", "")
+    if not re.fullmatch(r"\d{4}-\d{2}", month):
+        return jsonify({"error": "Provide the calendar month as YYYY-MM."}), 400
+    try:
+        datetime.strptime(f"{month}-01", "%Y-%m-%d")
+    except ValueError:
+        return jsonify({"error": "The requested calendar month is invalid."}), 400
+    try:
+        events = [
+            {**event, "source": "calendar"}
+            for event in fetch_brown_bear_month(month)
+            if event["date"].startswith(month)
+        ]
+    except BrownBearCalendarError as error:
+        return jsonify({"error": str(error)}), 502
+
+    connection = booking_connection()
+    try:
+        rows = connection.execute(
+            "SELECT id, user_name, slots FROM bookings WHERE status = 'confirmed'"
+        ).fetchall()
+    finally:
+        connection.close()
+    instrument_colors = {
+        item["name"]: item.get("color", "gray") for item in load_json("instruments.json")
+    }
+    for row in rows:
+        for slot in slots_from_row(row):
+            if slot["date"].startswith(month):
+                events.append({
+                    "date": slot["date"],
+                    "time": slot["time"],
+                    "title": row["user_name"],
+                    "instrument": slot["instrument"],
+                    "color": slot.get(
+                        "color", instrument_colors.get(slot["instrument"], "gray")
+                    ),
+                    "source": "portal",
+                    "bookingId": row["id"],
+                })
+    events.sort(key=lambda event: (event["date"], event["time"], event["instrument"]))
+    response = jsonify({
+        "month": month,
+        "timezone": "Asia/Kolkata",
+        "fetchedAt": datetime.now(timezone.utc).isoformat(),
+        "events": events,
+        "brownBearAdminUrl": f"{CALENDAR_URL}?Op=AdminPage",
+    })
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.patch("/api/admin/bookings/<booking_id>")
+def update_admin_booking(booking_id):
+    denied = require_admin()
+    if denied:
+        return denied
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Submit the booking status as a JSON object."}), 400
+    status = payload.get("status")
+    if status not in ("confirmed", "cancelled"):
+        return jsonify({"error": "Choose confirmed or cancelled as the booking status."}), 400
+
+    connection = booking_connection()
+    try:
+        row = connection.execute(
+            "SELECT * FROM bookings WHERE id = ?", (booking_id,)
+        ).fetchone()
+        if row is None:
+            return jsonify({"error": "Booking not found."}), 404
+        initial_status = row["status"]
+        calendar_booked = set()
+        if status == "confirmed" and row["status"] != "confirmed":
+            if any(slot_has_started(item) for item in slots_from_row(row)):
+                return jsonify({"error": "A past session cannot be restored."}), 409
+            restoring_slots = slots_from_row(row)
+            try:
+                calendar_events = brown_bear_events_between(
+                    min(date.fromisoformat(item["date"]) for item in restoring_slots),
+                    max(date.fromisoformat(item["date"]) for item in restoring_slots),
+                )
+            except BrownBearCalendarError as error:
+                return jsonify({"error": str(error)}), 502
+            calendar_booked = {
+                (item["instrument"], item["date"], item["time"])
+                for item in brown_bear_booked_slots(
+                    calendar_events, load_json("instruments.json")
+                )
+            }
+        connection.execute("BEGIN IMMEDIATE")
+        row = connection.execute(
+            "SELECT * FROM bookings WHERE id = ?", (booking_id,)
+        ).fetchone()
+        if row is None:
+            connection.rollback()
+            return jsonify({"error": "Booking not found."}), 404
+        if row["status"] != initial_status:
+            connection.rollback()
+            return jsonify({"error": "The booking status changed. Refresh the admin booking list."}), 409
+        if status == "confirmed" and row["status"] != "confirmed":
+            restoring_slots = slots_from_row(row)
+            if any(slot_has_started(item) for item in restoring_slots):
+                connection.rollback()
+                return jsonify({"error": "A past session cannot be restored."}), 409
+            if any(
+                (item["instrument"], item["date"], item["time"]) in calendar_booked
+                for item in restoring_slots
+            ):
+                connection.rollback()
+                return jsonify({
+                    "error": "The session is now booked in the facility calendar and cannot be restored."
+                }), 409
+            existing = connection.execute(
+                "SELECT id, slots FROM bookings WHERE status = 'confirmed' AND id != ?",
+                (booking_id,),
+            ).fetchall()
+            occupied = {
+                (item["instrument"], item["date"], item["time"])
+                for other in existing
+                for item in slots_from_row(other)
+            }
+            if any(
+                (item["instrument"], item["date"], item["time"]) in occupied
+                for item in slots_from_row(row)
+            ):
+                connection.rollback()
+                return jsonify({"error": "The slot has since been booked by another user."}), 409
+        connection.execute(
+            "UPDATE bookings SET status = ? WHERE id = ?", (status, booking_id)
+        )
+        updated = connection.execute(
+            "SELECT * FROM bookings WHERE id = ?", (booking_id,)
+        ).fetchone()
+        connection.commit()
+    except BookingSlotConflict:
+        connection.rollback()
+        return jsonify({"error": "The session is already reserved by another booking."}), 409
+    finally:
+        connection.close()
+    response = jsonify({"booking": booking_row(updated)})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.put("/api/admin/bookings/<booking_id>/slots")
+def update_admin_booking_slots(booking_id):
+    denied = require_admin()
+    if denied:
+        return denied
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict) or not isinstance(payload.get("slots"), list):
+        return jsonify({"error": "Submit the replacement sessions as a JSON array."}), 400
+    slots = payload["slots"]
+    if not 1 <= len(slots) <= 12:
+        return jsonify({"error": "Choose between 1 and 12 session slots."}), 400
+
+    instrument_records = {item["name"]: item for item in load_json("instruments.json")}
+    normalized_slots = []
+    seen_slots = set()
+    for slot in slots:
+        if not isinstance(slot, dict):
+            return jsonify({"error": "A selected session is invalid."}), 400
+        instrument = slot.get("instrument")
+        slot_date = slot.get("date")
+        time = slot.get("time")
+        try:
+            parsed_date = date.fromisoformat(slot_date)
+        except (TypeError, ValueError):
+            return jsonify({"error": "A selected session has an invalid date."}), 400
+        if (
+            instrument not in instrument_records
+            or time not in BOOKING_SLOTS
+            or parsed_date.weekday() not in BOOKING_WEEKDAYS
+            or parsed_date < facility_today()
+            or parsed_date > facility_today() + timedelta(days=90)
+        ):
+            return jsonify({"error": "A selected session is no longer available."}), 400
+        normalized = {
+            "instrument": instrument,
+            "date": slot_date,
+            "time": time,
+            "color": instrument_records[instrument].get("color", "gray"),
+        }
+        if slot_has_started(normalized):
+            return jsonify({"error": "A selected session has already started."}), 400
+        key = (instrument, slot_date, time)
+        if key in seen_slots:
+            return jsonify({"error": "Remove duplicate session slots before saving."}), 400
+        seen_slots.add(key)
+        normalized_slots.append(normalized)
+
+    try:
+        calendar_events = brown_bear_events_between(
+            min(date.fromisoformat(slot["date"]) for slot in normalized_slots),
+            max(date.fromisoformat(slot["date"]) for slot in normalized_slots),
+        )
+    except BrownBearCalendarError as error:
+        return jsonify({"error": str(error)}), 502
+    calendar_booked = {
+        (slot["instrument"], slot["date"], slot["time"])
+        for slot in brown_bear_booked_slots(
+            calendar_events, list(instrument_records.values())
+        )
+    }
+    if any(
+        (slot["instrument"], slot["date"], slot["time"]) in calendar_booked
+        for slot in normalized_slots
+    ):
+        return jsonify({"error": "A replacement session conflicts with the Brown Bear calendar."}), 409
+
+    connection = booking_connection()
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        row = connection.execute(
+            "SELECT * FROM bookings WHERE id = ?", (booking_id,)
+        ).fetchone()
+        if row is None:
+            connection.rollback()
+            return jsonify({"error": "Booking not found."}), 404
+        if row["status"] != "confirmed":
+            connection.rollback()
+            return jsonify({"error": "Only confirmed bookings can be rescheduled."}), 409
+        existing = connection.execute(
+            "SELECT id, slots FROM bookings WHERE status = 'confirmed' AND id != ?",
+            (booking_id,),
+        ).fetchall()
+        occupied = {
+            (slot["instrument"], slot["date"], slot["time"])
+            for other in existing
+            for slot in slots_from_row(other)
+        }
+        if any(
+            (slot["instrument"], slot["date"], slot["time"]) in occupied
+            for slot in normalized_slots
+        ):
+            connection.rollback()
+            return jsonify({"error": "A replacement session is already reserved by another website booking."}), 409
+        connection.execute(
+            "UPDATE bookings SET slots = ? WHERE id = ?",
+            (json.dumps(normalized_slots), booking_id),
+        )
+        updated = connection.execute(
+            "SELECT * FROM bookings WHERE id = ?", (booking_id,)
+        ).fetchone()
+        connection.commit()
+    except BookingSlotConflict:
+        connection.rollback()
+        return jsonify({"error": "A replacement session is already reserved by another booking."}), 409
+    finally:
+        connection.close()
+    response = jsonify({"booking": booking_row(updated)})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.delete("/api/admin/bookings/<booking_id>")
+def delete_admin_booking(booking_id):
+    denied = require_admin()
+    if denied:
+        return denied
+    connection = booking_connection()
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        row = connection.execute(
+            "SELECT form_path FROM bookings WHERE id = ?", (booking_id,)
+        ).fetchone()
+        if row is None:
+            connection.rollback()
+            return jsonify({"error": "Booking not found."}), 404
+        form_path = row["form_path"]
+        connection.execute("DELETE FROM bookings WHERE id = ?", (booking_id,))
+        connection.commit()
+    finally:
+        connection.close()
+
+    form_deleted = remove_booking_form(form_path)
+    response = jsonify({"deleted": True, "formDeleted": form_deleted})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/api/admin/bookings/<booking_id>/form")
+def download_booking_form(booking_id):
+    denied = require_admin()
+    if denied:
+        return denied
+    connection = booking_connection()
+    try:
+        row = connection.execute(
+            "SELECT form_name, form_path FROM bookings WHERE id = ?", (booking_id,)
+        ).fetchone()
+    finally:
+        connection.close()
+    if row is None or not row["form_path"]:
+        return jsonify({"error": "The booking form was not found."}), 404
+    try:
+        content = read_booking_form(row["form_path"])
+    except SupabaseStorageError as error:
+        return jsonify({"error": str(error)}), 502
+    if content is None:
+        return jsonify({"error": "The stored facility user form could not be found."}), 404
+    response = send_file(
+        io.BytesIO(content),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=secure_filename(row["form_name"]) or "facility-user-form.pdf",
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+class BrownBearCalendarParser(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.in_calendar = False
+        self.table_depth = 0
+        self.row = None
+        self.cell = None
+        self.event = None
+        self.capture = None
+        self.header_cells = []
+        self.day_row_count = 0
+        self.events = []
+
+    def handle_starttag(self, tag, attrs):
+        attributes = dict(attrs)
+        classes = set(attributes.get("class", "").split())
+
+        if tag == "table":
+            if not self.in_calendar and "CalBlock" in classes:
+                self.in_calendar = True
+                self.table_depth = 1
+            elif self.in_calendar:
+                self.table_depth += 1
+            return
+
+        if not self.in_calendar or self.table_depth != 1:
+            return
+
+        if tag == "tr":
+            self.row = {"class": set(attributes.get("class", "").split()), "cells": []}
+            return
+
+        if tag in ("td", "th") and self.row is not None:
+            self.cell = {
+                "class": set(attributes.get("class", "").split()),
+                "date": None,
+                "events": [],
+            }
+            self.row["cells"].append(self.cell)
+            return
+
+        if self.cell is None:
+            return
+
+        if tag == "a" and "DayHeader" in self.cell["class"]:
+            href = attributes.get("href", "")
+            if "ShowDay" in href:
+                match = re.search(r"Date=(\d{4})[-/](\d{2})[-/](\d{2})", href)
+                if match:
+                    self.cell["date"] = "-".join(match.groups())
+
+        if tag == "div" and "CalEvent" in classes:
+            category = next(
+                (name for name in classes if name in BROWN_BEAR_INSTRUMENT_CLASSES),
+                None,
+            )
+            self.event = {
+                "time": "",
+                "title": "",
+                "instrument": (
+                    BROWN_BEAR_INSTRUMENT_CLASSES[category] if category else ""
+                ),
+                "color": category.removeprefix("c_").lower() if category else "neutral",
+            }
+        elif tag == "div" and self.event is not None and "TimeLabel" in classes:
+            self.capture = ("time", [])
+        elif tag == "div" and self.event is not None and "EventLink" in classes:
+            self.capture = ("title", [])
+
+    def handle_data(self, data):
+        if self.capture is not None:
+            self.capture[1].append(data)
+
+    def handle_endtag(self, tag):
+        if not self.in_calendar:
+            return
+
+        if tag == "div" and self.capture is not None:
+            field, parts = self.capture
+            self.event[field] = " ".join(" ".join(parts).split())
+            self.capture = None
+            return
+
+        if tag == "div" and self.event is not None and self.cell is not None:
+            if self.event["title"]:
+                self.cell["events"].append(self.event)
+            self.event = None
+            return
+
+        if tag == "td":
+            self.cell = None
+            return
+
+        if tag == "tr" and self.row is not None:
+            if "DayHeaderRow" in self.row["class"]:
+                self.header_cells = self.row["cells"]
+            elif "DayRow" in self.row["class"]:
+                self.day_row_count += 1
+                for header, cell in zip(self.header_cells, self.row["cells"]):
+                    date_value = header["date"]
+                    if date_value:
+                        self.events.extend(
+                            {"date": date_value, **event}
+                            for event in cell["events"]
+                        )
+            self.row = None
+            return
+
+        if tag == "table":
+            self.table_depth -= 1
+            if self.table_depth == 0:
+                self.in_calendar = False
+
+
+def load_json(name):
+    path = BASE / "frontend" / "data" / name
+    return json.loads(path.read_text(encoding="utf-8"))
+
+@app.get("/api/health")
+def health():
+    try:
+        connection = booking_connection()
+        connection.close()
+    except (BookingConfigurationError, BookingDatabaseError, sqlite3.Error):
+        app.logger.exception("Booking database health check failed")
+        return jsonify({"status": "unavailable", "service": "Flow Cytometry Facility API"}), 503
+    return jsonify({
+        "status": "ok",
+        "service": "Flow Cytometry Facility API",
+        "persistence": "supabase" if use_supabase_storage() else "sqlite",
+    })
+
+@app.get("/api/instruments")
+def get_instruments():
+    return jsonify(load_json("instruments.json"))
+
+@app.get("/api/content")
+def get_content():
+    return jsonify(load_json("site-content.json"))
+
+
+@app.get("/api/calendar")
+def get_calendar():
+    month = request.args.get("month", "")
+    if not re.fullmatch(r"\d{4}-\d{2}", month):
+        return jsonify({"error": "Provide the calendar month as YYYY-MM."}), 400
+
+    try:
+        month_start = datetime.strptime(f"{month}-01", "%Y-%m-%d")
+    except ValueError:
+        return jsonify({"error": "The requested calendar month is invalid."}), 400
+
+    try:
+        events = [
+            {**event, "source": "calendar"}
+            for event in fetch_brown_bear_month(month)
+            if event["date"].startswith(month)
+        ]
+    except BrownBearCalendarError as error:
+        return jsonify({"error": str(error)}), 502
+
+    connection = booking_connection()
+    try:
+        rows = connection.execute(
+            "SELECT slots FROM bookings WHERE status = 'confirmed'"
+        ).fetchall()
+    finally:
+        connection.close()
+    instrument_colors = {
+        item["name"]: item.get("color", "gray") for item in load_json("instruments.json")
+    }
+    for row in rows:
+        for slot in slots_from_row(row):
+            if slot["date"].startswith(month):
+                events.append({
+                    "date": slot["date"],
+                    "time": slot["time"],
+                    "title": "Portal booking",
+                    "instrument": slot["instrument"],
+                    "color": slot.get("color", instrument_colors.get(slot["instrument"], "gray")),
+                    "source": "portal",
+                })
+    result = jsonify({
+        "month": month,
+        "timezone": "Asia/Kolkata",
+        "fetchedAt": datetime.now(timezone.utc).isoformat(),
+        "source": CALENDAR_URL,
+        "events": events,
+    })
+    result.headers["Cache-Control"] = "no-store"
+    return result
+
+
+@app.get("/")
+def serve_home():
+    return send_from_directory(BASE / "frontend", "index.html")
+
+
+@app.get("/<path:asset_path>")
+def serve_frontend(asset_path):
+    return send_from_directory(BASE / "frontend", asset_path)
+
+
+if __name__ == "__main__":
+    app.run(host="127.0.0.1", port=5000, debug=True)

@@ -1,0 +1,211 @@
+{
+  "source": {
+    "title": "Flow Cytometry Facility, IISc",
+    "url": "https://sites.google.com/view/facsiisc/",
+    "accessed": "2026-09-29"
+  },
+  "facility": {
+    "name": "Flow Cytometry Facility",
+    "alsoKnownAs": "FACS (Fluorescence Activated Cell Sorter) Facility",
+    "established": "1997",
+    "support": "Department of Biotechnology, Government of India",
+    "location": "Ground Floor, GC-03, Biological Sciences Building, Indian Institute of Science, Bangalore-560012",
+    "description": "The FACS facility was established in 1997 with support from DBT, Government of India. Its current instrument lineup includes four flow cytometers for advanced scientific research. All are operator-assisted. The facility also has offline analysis systems for flow-cytometry users.",
+    "capabilities": [
+      "Flow cytometry analysis",
+      "High-speed cell sorting",
+      "Offline flow-cytometry data analysis"
+    ]
+  },
+  "contact": {
+    "phone": "+91-80-22933451",
+    "emails": [
+      "flowcytometryiisc@gmail.com",
+      "wrsurin@iisc.ac.in"
+    ],
+    "map": "https://www.google.com/maps/search/?api=1&query=Division%20of%20Biological%20Sciences%2C%20Indian%20Institute%20of%20Science%2C%20Bengaluru"
+  },
+  "instruments": {
+    "total": 4,
+    "analyzers": [
+      "CytoFLEX LX (Beckman Coulter)",
+      "Symphony A1 (BD)"
+    ],
+    "sorters": [
+      "Discover S8 Spectral Flow Cytometer (BD)",
+      "FACSAria™ Fusion (BD)"
+    ],
+    "operatorAssisted": true
+  },
+  "people": {
+    "committee": [
+      {
+        "name": "Prof. Annapoorni Rangarajan",
+        "role": "Convener",
+        "title": "Professor",
+        "department": "Developmental Biology and Genetics",
+        "profile": "https://dbg.iisc.ac.in/people/annapoorni-rangarajan"
+      },
+      {
+        "name": "Prof. Ganesh Nagaraju",
+        "role": "Member",
+        "title": "Professor",
+        "department": "Department of Biochemistry",
+        "profile": "https://biochem.iisc.ac.in/ganesh-nagaraju.php"
+      },
+      {
+        "name": "Prof. Patrick D' Silva",
+        "role": "Member",
+        "title": "Professor",
+        "department": "Department of Biochemistry",
+        "profile": "https://biochem.iisc.ac.in/patrick-d-silva.php"
+      },
+      {
+        "name": "Prof. Amit Singh",
+        "role": "Member",
+        "title": "Professor",
+        "department": "Department of Microbiology and Cell Biology / Centre for Infectious Disease Research",
+        "profile": "https://mcb.iisc.ac.in/research-single/amit-singh"
+      }
+    ],
+    "staff": [
+      {
+        "name": "Mr. Munish A",
+        "title": "Technical Assistant"
+      },
+      {
+        "name": "Ms. Shradha Sanil",
+        "title": "Project Associate-I"
+      }
+    ],
+    "source": "https://sites.google.com/view/facsiisc/people"
+  },
+  "services": [
+    {
+      "title": "Flow Analysis",
+      "text": "Cell population analysis, phenotyping and functional studies."
+    },
+    {
+      "title": "Cell Sorting",
+      "text": "High-speed sorting with the facility's cell sorters."
+    },
+    {
+      "title": "Data Analysis",
+      "text": "Offline flow-cytometry analysis systems are available to facility users."
+    },
+    {
+      "title": "Operator Assistance",
+      "text": "All flow cytometers are operator-assisted."
+    }
+  ],
+  "offlineAnalysisSoftware": {
+    "title": "Offline Analysis Systems and Softwares",
+    "description": "The facility lists the following software for flow-cytometry data analysis. Flow-cytometry users may make use of these systems.",
+    "items": [
+      "FlowJo Version 10",
+      "Kaluza 2.1",
+      "Summit 5.2",
+      "CytExpert Software",
+      "BD FACSSuite",
+      "BD FACSDiva 6.1.3",
+      "Kaluza 1.2",
+      "BD CellQuest Pro",
+      "FCS Express"
+    ],
+    "source": "https://sites.google.com/view/facsiisc/offline-analysis-softwares"
+  },
+  "resources": [
+    {
+      "title": "Multicolor flow cytometry panel design",
+      "publisher": "Abcam",
+      "url": "https://www.abcam.com/primary-antibodies/multicolor-flow-cytometry-panel-design"
+    },
+    {
+      "title": "Flow cytometry panel design",
+      "publisher": "Thermo Fisher Scientific",
+      "url": "https://www.thermofisher.com/in/en/home/references/newsletters-and-journals/bioprobes-journal-of-cell-biology-applications/bioprobes-71/bioprobes-71-flow-cytometry-panel-design.html"
+    },
+    {
+      "title": "Fluorescence spectrum analyzer",
+      "publisher": "Beckman Coulter",
+      "url": "https://www.beckman.com/flow-cytometry/fluorescence-spectrum-analyzer"
+    },
+    {
+      "title": "SpectraViewer",
+      "publisher": "Thermo Fisher Scientific",
+      "url": "https://www.thermofisher.com/order/spectra-viewer"
+    },
+    {
+      "title": "Spectrum Viewer",
+      "publisher": "BD Biosciences",
+      "url": "https://www.bdbiosciences.com/en-us/applications/research-applications/multicolor-flow-cytometry/product-selection-tools/spectrum-viewer"
+    },
+    {
+      "title": "Spectra Analyzer",
+      "publisher": "BioLegend",
+      "url": "https://www.biolegend.com/en-us/spectra-analyzer"
+    },
+    {
+      "title": "Spectrum Guide",
+      "publisher": "BD Biosciences",
+      "url": "https://www.bdbiosciences.com/us/s/spectrumguidepage"
+    },
+    {
+      "title": "Flow cytometry websites archive",
+      "publisher": "Purdue University",
+      "url": "http://www.cyto.purdue.edu/cdroms/cyto6/content/archive/1999/att-1160/01-flow_sites.htm"
+    },
+    {
+      "title": "The Cytometry Society, India",
+      "publisher": "TCS India",
+      "url": "http://tcs.res.in/"
+    },
+    {
+      "title": "International Society for Advancement of Cytometry",
+      "publisher": "ISAC",
+      "url": "https://isac-net.org/"
+    }
+  ],
+  "documents": {
+    "items": [
+      {
+        "title": "CytoFLEX LX",
+        "format": "PDF",
+        "lastModified": "2020-11-05",
+        "url": "https://drive.google.com/file/d/1-ngsJzFZl00ujRPjUp7CCU7XbvuuNn7g/view?usp=drive_web"
+      },
+      {
+        "title": "Revised user charges",
+        "format": "PDF",
+        "lastModified": "2023-10-16",
+        "effectiveDate": "2023-11-01",
+        "url": "https://drive.google.com/file/d/1IypqLbMMFEdebMY9m-HYlPagSZt_hX5S/view?usp=drive_web",
+        "notice": "The posted fee schedule is dated 2023; confirm current user charges with the facility."
+      }
+    ],
+    "equipmentDirectory": "https://www.istem.gov.in/rd-infrastructure-map/equipment-list"
+  },
+  "calendar": {
+    "source": "https://www.brownbearsw.com/cal/flow_cytometry",
+    "displayMode": "combined",
+    "availabilityNote": "Existing Brown Bear sessions and confirmed website bookings appear together. New bookings are stored in the website portal and are not written back to Brown Bear."
+  },
+  "workshops": {
+    "past": [
+      {
+        "title": "Basics of Flow Cytometry and Immunophenotyping",
+        "organizers": "FACS Facility, Division of Biological Sciences, IISc and Beckman Coulter",
+        "date": "2024-07-26/2024-07-27",
+        "duration": "2 days",
+        "description": "Two days of sessions on the fundamental principles and applications of flow cytometry, including immunophenotyping, with an in-depth look at the Beckman Coulter CytoFLEX LX Flow Cytometer.",
+        "registrationUrl": "https://bit.ly/45P2aZS",
+        "registrationStatus": "Historical registration link; the event has passed.",
+        "flyer": "https://indianinstituteofscience-my.sharepoint.com/:b:/g/personal/munish_iisc_ac_in/Eay13S26mFZCkv0ZvlHhN0EBZeqhKWOw9m0ylBVj5vJ5oA?e=hYWqmB"
+      }
+    ],
+    "pastSource": "https://sites.google.com/view/facsiisc/past-workshops",
+    "upcoming": [],
+    "upcomingSource": "https://sites.google.com/view/facsiisc/upcoming-workshops",
+    "upcomingNotice": "No upcoming workshops were listed on the source website when reviewed."
+  }
+}

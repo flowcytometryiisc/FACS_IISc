@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Browse four operator-assisted flow cytometers at the IISc Flow Cytometry Facility.">
+  <title>Instruments | Flow Cytometry Facility, IISc</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+<main class="inner-page">
+  <header class="page-hero hero-instruments"><div class="page-container"><div class="eyebrow light">OUR INSTRUMENTS</div><h1>Flow cytometers</h1><p>Four operator-assisted instruments for analysis and cell sorting.</p></div></header>
+  <section class="page-container content-section instrument-page-content">
+    <div class="section-heading"><div><div class="eyebrow">ANALYSIS &amp; SORTING</div><h2>Choose an instrument category</h2></div><p>Instrument list and categories reflect information published by the facility.</p></div>
+    <div class="instrument-page-filters filters" aria-label="Filter instruments">
+      <button class="filter active" type="button" data-filter="all" aria-pressed="true">All <span>4</span></button>
+      <button class="filter" id="analyzers" type="button" data-filter="Analyzer" aria-pressed="false">Analyzers <span>2</span></button>
+      <button class="filter" id="sorters" type="button" data-filter="Sorter" aria-pressed="false">Cell sorters <span>2</span></button>
+    </div>
+    <div id="instrument-grid" class="instrument-grid instrument-page-grid" aria-live="polite"></div>
+    <div class="operator-note"><span class="note-icon">◎</span><div><strong>Operator-assisted facility</strong><p>Choose an instrument above to view its details, then book an available session through the portal.</p></div><a class="btn primary" href="booking.html">Book a session <b>→</b></a></div>
+    <p class="source-note">Instrument lineup and categories from the <a href="https://sites.google.com/view/facsiisc/" target="_blank" rel="noreferrer">previous facility homepage ↗</a>.</p>
+  </section>
+</main>
+<script src="js/site-shell.js"></script><script src="js/main.js"></script>
+</body>
+</html>

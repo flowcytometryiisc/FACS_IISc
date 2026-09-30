@@ -1,0 +1,40 @@
+[
+  {
+    "name": "CytoFLEX LX",
+    "manufacturer": "Beckman Coulter",
+    "type": "Analyzer",
+    "color": "purple",
+    "colorCode": "#8B5CF6",
+    "description": "Flow cytometer analyzer. Operator-assisted.",
+    "image": "assets/images/instruments/cytoflex-lx.jpg",
+    "source": "https://sites.google.com/view/facsiisc/"
+  },
+  {
+    "name": "Discover S8 Spectral Flow Cytometer",
+    "manufacturer": "BD",
+    "type": "Sorter",
+    "color": "teal",
+    "colorCode": "#0891B2",
+    "description": "Spectral flow cytometer. Operator-assisted.",
+    "image": "assets/images/instruments/discover-s8.jpg"
+  },
+  {
+    "name": "Symphony A1",
+    "manufacturer": "BD",
+    "type": "Analyzer",
+    "color": "blue",
+    "colorCode": "#2878D0",
+    "description": "Flow cytometer analyzer. Operator-assisted.",
+    "image": "assets/images/instruments/symphony-a1.jpg"
+  },
+  {
+    "name": "FACSAria™ Fusion",
+    "manufacturer": "BD",
+    "type": "Sorter",
+    "color": "gray",
+    "colorCode": "#7B8490",
+    "description": "Cell sorter with advanced features. Operator-assisted.",
+    "image": "assets/images/instruments/facsaria-fusion.jpg",
+    "source": "https://sites.google.com/view/facsiisc/"
+  }
+]

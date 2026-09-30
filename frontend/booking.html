@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Choose a flow cytometer and request an operator-assisted session at the IISc facility.">
+  <title>Book a Session | Flow Cytometry Facility, IISc</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+<main class="inner-page">
+  <header class="page-hero hero-booking"><div class="page-container"><div class="eyebrow light">OPERATOR-ASSISTED SESSIONS</div><h1>Book a flow cytometry session</h1><p>Select an instrument, find a time, and submit your completed facility user form.</p></div></header>
+  <section class="page-container content-section booking-portal" data-booking-portal>
+    <div class="booking-steps" aria-label="Booking steps"><span class="active"><b>1</b> Choose a session</span><span><b>2</b> Your details</span><span><b>3</b> Confirm booking</span></div>
+    <div class="booking-window-notice"><span aria-hidden="true">i</span><p><strong>Operator-assisted bookings</strong><br>Availability combines existing Brown Bear calendar sessions with confirmed bookings made through this portal. Newly confirmed portal bookings appear in this website’s calendar. Brown Bear itself is managed separately by facility staff, so contact them for changes to existing Brown Bear entries.</p></div>
+    <div class="booking-layout">
+      <div class="booking-main-column">
+        <section class="booking-panel" aria-labelledby="booking-instrument-title">
+          <div class="booking-panel-heading"><span class="booking-step-number">1</span><div><span class="eyebrow">SELECT AN INSTRUMENT</span><h2 id="booking-instrument-title">Choose your instrument</h2></div></div>
+          <div class="booking-instrument-grid" id="booking-instruments" aria-live="polite"></div>
+          <div class="booking-date-strip" id="booking-dates" aria-label="Choose a session date"></div>
+          <div class="booking-slot-area">
+            <div class="booking-slot-heading"><div><span class="eyebrow">AVAILABLE SESSIONS</span><h3 id="booking-slot-date">Loading availability…</h3></div><span class="booking-timezone">All times IST <button class="booking-availability-refresh" type="button" data-booking-refresh>Refresh</button></span></div>
+            <div class="booking-slot-list" id="booking-slots" aria-live="polite"><p class="booking-inline-status">Loading available sessions…</p></div>
+            <p class="booking-inline-status" id="booking-availability-status" role="status">Availability is checked against Brown Bear every 30 seconds and again before a booking is confirmed.</p>
+          </div>
+        </section>
+        <section class="booking-panel booking-details-panel" aria-labelledby="booking-details-title">
+          <div class="booking-panel-heading"><span class="booking-step-number">2</span><div><span class="eyebrow">BOOKING DETAILS</span><h2 id="booking-details-title">Tell us about your session</h2></div></div>
+          <form id="booking-form" class="booking-form" enctype="multipart/form-data" novalidate>
+            <div class="booking-form-grid">
+              <label>Student / user name <span>*</span><input name="userName" autocomplete="name" maxlength="120" placeholder="Full name" required></label>
+              <label>Principal investigator (PI) <span>*</span><input name="piName" maxlength="120" placeholder="PI name" required></label>
+              <label>Email address <span>*</span><input name="email" type="email" autocomplete="email" maxlength="254" placeholder="name@iisc.ac.in" required></label>
+              <label>Phone number <span>*</span><input name="phone" type="tel" autocomplete="tel" maxlength="24" placeholder="10-digit number" required></label>
+              <label>Department / institution<input name="department" maxlength="160" placeholder="e.g. Department of Biological Sciences"></label>
+              <label>Sample type <span>*</span><select name="specimen" required><option value="">Choose a sample type</option><option>Cell suspension</option><option>Primary cells</option><option>Cell line</option><option>Tissue-derived cells</option><option>Other</option></select></label>
+              <label class="booking-notes-field">Experiment notes<textarea name="notes" rows="3" maxlength="1500" placeholder="Cell type, fluorophores, sorting needs, or other details"></textarea></label>
+              <label class="booking-upload-field">Completed facility user form <span>*</span><input name="userForm" type="file" accept="application/pdf,.pdf" required><small>PDF only · maximum 10 MB. Use the current facility user form provided by staff; <a href="contact.html">contact the facility</a> if you need a copy.</small></label>
+            </div>
+            <div class="booking-selection-summary" id="booking-selection-summary">Select one or more available sessions above.</div>
+            <div class="booking-form-actions"><p id="booking-submit-status" role="status" aria-live="polite"></p><button class="btn primary" type="submit"><span class="booking-step-number">3</span> Confirm selected bookings <b>→</b></button></div>
+          </form>
+        </section>
+      </div>
+      <aside class="booking-sidebar">
+        <section class="booking-panel booking-selected-panel"><span class="eyebrow">YOUR SELECTED SESSIONS</span><h2 id="booking-selected-count">No sessions selected</h2><div id="booking-selected-list" class="booking-selected-list"><p>Select available slots to add them here.</p></div></section>
+        <section class="booking-panel booking-help-panel"><span class="eyebrow">BEFORE YOU BOOK</span><h2>Session checklist</h2><ul><li>All sessions are operator-assisted.</li><li>Bring prepared samples and confirm your experiment plan.</li><li>A completed facility user form is required for each booking request.</li><li>Contact the facility if you need help choosing an instrument.</li></ul><a href="contact.html">Contact the facility →</a></section>
+      </aside>
+    </div>
+  </section>
+</main>
+<dialog class="booking-confirmation-dialog" id="booking-confirmation" aria-labelledby="booking-confirmation-title">
+  <div class="booking-confirmation-icon" aria-hidden="true">✓</div><div class="eyebrow">SESSION RESERVED</div><h2 id="booking-confirmation-title">Booking confirmed</h2><p>Your selected session has been reserved. Save this booking ID for future reference.</p><strong class="booking-confirmation-id" id="booking-confirmation-id"></strong><div id="booking-confirmation-slots"></div><button class="btn primary" type="button" data-close-booking-confirmation>Done</button>
+</dialog>
+<script src="js/site-shell.js"></script><script src="js/booking-portal.js"></script>
+</body>
+</html>

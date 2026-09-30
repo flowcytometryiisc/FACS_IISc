@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="View the live Flow Cytometry Facility booking calendar at the Indian Institute of Science.">
+  <title>Facility Calendar | Flow Cytometry Facility, IISc</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+<main class="inner-page calendar-page">
+  <header class="page-hero hero-calendar"><div class="page-container"><div class="eyebrow light">FACILITY AVAILABILITY</div><h1>Booking calendar</h1><p>View the live Flow Cytometry Facility schedule and check upcoming instrument sessions.</p></div></header>
+  <section class="page-container content-section" data-calendar-browser>
+    <div class="calendar-toolbar">
+      <div><div class="eyebrow">LIVE FACILITY SCHEDULE</div><h2>Instrument bookings</h2><p>Select a date to view the bookings for that day without leaving this page.</p></div>
+    </div>
+    <div class="calendar-notice"><span aria-hidden="true">i</span><p>This calendar combines existing Brown Bear sessions with confirmed bookings made through this website. Available sessions can be reserved using the booking form. Existing Brown Bear entries are managed by facility staff.</p></div>
+    <div class="calendar-browser">
+      <div class="calendar-browser-header"><div><div class="eyebrow">SELECT A DATE</div><h2 id="calendar-month" aria-live="polite"></h2></div><button class="calendar-today" type="button" data-calendar-today>Today</button></div>
+      <div class="calendar-controls">
+        <div class="calendar-month-controls" aria-label="Calendar month controls">
+          <button type="button" data-calendar-month-step="-1" aria-label="Previous month">←</button>
+          <button type="button" data-calendar-month-step="1" aria-label="Next month">→</button>
+        </div>
+        <label class="calendar-date-picker">Go to date<input id="calendar-date" type="date" aria-label="Select a schedule date"></label>
+      </div>
+      <div class="calendar-weekdays" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span></div>
+      <div id="calendar-dates" class="calendar-dates" role="group" aria-label="Select a schedule date"></div>
+      <div class="calendar-selected">
+        <div><span>SELECTED DATE</span><strong id="calendar-selected-date" aria-live="polite"></strong></div>
+        <a class="calendar-book-link" id="calendar-book-date" href="booking.html">Book a session on this date →</a>
+      </div>
+      <section class="calendar-live" aria-labelledby="calendar-schedule-title">
+        <div class="calendar-live-heading">
+          <div><span class="eyebrow">FACILITY CALENDAR · LIVE</span><h3 id="calendar-schedule-title">Schedule for selected date</h3><div class="calendar-instrument-legend" aria-label="Instrument booking colors"></div></div>
+          <button class="calendar-refresh" type="button" data-calendar-refresh><span aria-hidden="true">↻</span> Refresh</button>
+        </div>
+        <p class="calendar-live-status" id="calendar-live-status" role="status" aria-live="polite">Loading the live facility schedule…</p>
+        <div class="calendar-event-list" id="calendar-events" aria-live="polite"></div>
+      </section>
+    </div>
+    <div class="calendar-followup">
+      <div><span class="eyebrow">READY TO BOOK?</span><h2>Choose an available instrument and time.</h2><p>Sessions are reserved through the booking portal and appear on this calendar after confirmation.</p></div>
+      <a class="btn primary" id="calendar-book-session" href="booking.html">Book a session <b>→</b></a>
+    </div>
+    <p class="source-note">Existing sessions are synced from Brown Bear Software. New website bookings are saved in the facility booking portal and shown alongside those sessions; they are not written back to Brown Bear.</p>
+  </section>
+</main>
+<script src="js/site-shell.js"></script><script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Manage facility bookings and access completed user forms.">
+  <title>Admin Portal | Flow Cytometry Facility, IISc</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+<main class="inner-page">
+  <header class="page-hero hero-booking"><div class="page-container"><div class="eyebrow light">FACILITY STAFF</div><h1>Booking management</h1><p>Review the synced facility calendar and manage bookings made through this website.</p></div></header>
+  <section class="page-container content-section admin-portal" data-admin-portal>
+    <section class="admin-login-panel booking-panel" id="admin-login-panel" aria-labelledby="admin-login-title">
+      <span class="eyebrow">STAFF SIGN IN</span><h2 id="admin-login-title">Admin portal</h2><p>Sign in to view and manage facility bookings.</p>
+      <form id="admin-login-form"><label for="admin-password">Admin password</label><input id="admin-password" name="password" type="password" autocomplete="current-password" required><button class="btn primary" type="submit">Sign in <b>→</b></button></form>
+      <p class="admin-status" id="admin-login-status" role="status" aria-live="polite"></p>
+    </section>
+    <section class="admin-dashboard" id="admin-dashboard" hidden>
+      <div class="admin-dashboard-header"><div><div class="eyebrow">FACILITY OPERATIONS</div><h2>Bookings</h2><p>Manage website bookings here; use Brown Bear’s own admin sign-in to change its legacy events.</p></div><button class="btn outline admin-logout" type="button" id="admin-logout">Sign out</button></div>
+      <div class="admin-stats" id="admin-stats"></div>
+      <section class="admin-calendar-panel booking-panel" aria-labelledby="admin-calendar-title">
+        <div class="admin-calendar-heading"><div><span class="eyebrow">MONTH AT A GLANCE</span><h3 id="admin-calendar-title">Facility calendar</h3><p>Select a weekday to review and manage that day. Brown Bear events are read-only here.</p></div><div class="admin-calendar-controls"><button class="btn outline" id="admin-calendar-previous" type="button" aria-label="Previous month">←</button><label class="visually-hidden" for="admin-calendar-month">Month</label><input id="admin-calendar-month" type="month"><button class="btn outline" id="admin-calendar-next" type="button" aria-label="Next month">→</button><button class="btn outline" id="admin-calendar-refresh" type="button">↻ Sync</button></div></div>
+        <div class="admin-calendar-toolbar"><label for="admin-calendar-instrument">Show instrument</label><select id="admin-calendar-instrument"><option value="">All instruments</option></select><div class="admin-calendar-legend"><span><i class="brown-bear"></i>Brown Bear · managed externally</span><span><i class="portal"></i>Website booking · editable here</span></div></div>
+        <p id="admin-calendar-status" class="admin-status" role="status" aria-live="polite">Loading the synced facility calendar…</p>
+        <div id="admin-calendar-events" class="admin-calendar-workspace" aria-live="polite"></div>
+        <div class="admin-brownbear-access"><span>To edit or delete legacy events, open Brown Bear and sign in with its separate admin password.</span><a id="admin-brownbear-admin" class="admin-detail-button" href="https://www.brownbearsw.com/cal/flow_cytometry?Op=AdminPage" target="_blank" rel="noopener noreferrer">Open Brown Bear admin ↗</a></div>
+      </section>
+      <div class="admin-booking-toolbar"><label class="admin-search">Search bookings<input type="search" id="admin-search" placeholder="Name, PI, email or booking ID"></label><label>Filter by status<select id="admin-status-filter"><option value="all">All bookings</option><option value="confirmed">Confirmed</option><option value="cancelled">Cancelled</option></select></label><button class="btn outline" type="button" id="admin-refresh">↻ Refresh</button></div>
+      <p id="admin-dashboard-status" class="admin-status" role="status" aria-live="polite"></p>
+      <div id="admin-booking-list" class="admin-booking-list"></div>
+    </section>
+  </section>
+</main>
+<dialog class="booking-confirmation-dialog admin-detail-dialog" id="admin-booking-detail" aria-labelledby="admin-detail-title">
+  <div class="admin-detail-heading"><div><span class="eyebrow">BOOKING DETAILS</span><h2 id="admin-detail-title"></h2></div><button class="instrument-dialog-close" type="button" data-close-admin-detail aria-label="Close booking details">&times;</button></div>
+  <div id="admin-detail-content"></div>
+</dialog>
+<dialog class="booking-confirmation-dialog admin-edit-dialog" id="admin-edit-booking" aria-labelledby="admin-edit-title">
+  <div class="admin-detail-heading"><div><span class="eyebrow">WEBSITE BOOKING</span><h2 id="admin-edit-title">Change booked sessions</h2></div><button class="instrument-dialog-close" type="button" data-close-admin-edit aria-label="Close edit booking">&times;</button></div>
+  <p class="admin-edit-intro">Changes are checked against the live Brown Bear calendar and other website bookings.</p>
+  <form id="admin-edit-form"><div id="admin-edit-slots" class="admin-edit-slots"></div><p id="admin-edit-status" class="admin-status" role="status" aria-live="polite"></p><div class="admin-edit-actions"><button class="btn outline" type="button" data-close-admin-edit>Keep current sessions</button><button class="btn primary" type="submit">Save changes</button></div></form>
+</dialog>
+<script src="js/site-shell.js"></script><script src="js/admin-portal.js"></script>
+</body>
+</html>
