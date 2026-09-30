@@ -47,6 +47,23 @@ The Supabase URL, service-role key, database URL, Flask key, and admin password
 must not be committed to the repository. Start from [`.env.example`](./.env.example)
 for variable names only; do not copy its placeholders into production.
 
+### Render deployment check
+
+In the Render web service's **Environment** settings, add the server-side
+variables from the table above using the actual values from the production
+Supabase project. In particular, `DATABASE_URL` alone is not enough: when it is
+set, the app requires both `SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY` for Supabase-backed persistence, followed by a
+persistent `FLASK_SECRET_KEY`. Save the settings and redeploy the service.
+
+Run the SQL migration in that same Supabase project before using bookings. After
+the deployment is live, `https://<your-service>.onrender.com/api/health`
+should return HTTP 200 with status `ok` and persistence `supabase`, and
+`/api/calendar?month=YYYY-MM` should return HTTP 200. A calendar failure caused
+by incomplete persistence configuration is reported as HTTP 503; Brown Bear
+events are fetched live, while portal bookings are read from Supabase. Website
+bookings are not written back to Brown Bear.
+
 The existing admin login uses one server-configured password. For a public
 production deployment, restrict staff access at the hosting layer or plan a
 follow-up migration to individual Supabase Auth accounts with MFA and roles.

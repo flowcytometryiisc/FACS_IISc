@@ -437,6 +437,18 @@ def booking_upload_too_large(_error):
     return jsonify({"error": "The uploaded user form must be smaller than 10 MB."}), 413
 
 
+@app.errorhandler(BookingConfigurationError)
+def booking_persistence_not_configured(error):
+    app.logger.error("Booking persistence is not configured: %s", error)
+    return jsonify({"error": "The facility booking service is temporarily unavailable."}), 503
+
+
+@app.errorhandler(BookingDatabaseError)
+def booking_database_unavailable(_error):
+    app.logger.exception("The facility booking database is unavailable")
+    return jsonify({"error": "The facility booking service is temporarily unavailable."}), 503
+
+
 @app.get("/api/booking-availability")
 def get_booking_availability():
     start = request.args.get("start", "")
