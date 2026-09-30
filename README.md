@@ -1,4 +1,4 @@
-# Flow Cytometry Facility — IISc website preview
+# Flow Cytometry Facility — IISc website
 
 ## Open the preview
 
