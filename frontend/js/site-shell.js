@@ -52,9 +52,11 @@ sidebar.addEventListener("focusout", () => {
 siteMain.insertAdjacentHTML("beforeend", `
   <footer>
     <div class="container footer-top">
-      <a class="footer-brand" href="index.html"><span class="brand-logo">IISc</span><span><strong>Indian Institute of Science</strong><small>Bengaluru</small></span></a>
-      <nav class="footer-links" aria-label="Footer navigation">
-        <a href="about.html">About</a><a href="people.html">People</a><a href="instruments.html">Instruments</a><a href="booking.html">Book a slot</a><a href="workshops.html">Events &amp; Workshop</a><a href="forms-resources.html">Forms &amp; Resources</a><a href="data-analysis.html">Data Analysis</a><a href="contact.html">Contact</a><a href="admin.html">Staff admin login</a>
+      <a class="footer-brand" href="index.html"><img class="footer-seal" src="assets/images/site/iisc-seal.jpg" alt="Indian Institute of Science seal"><span class="footer-brand-copy"><strong>Indian Institute of Science</strong><small>Bengaluru</small></span></a>
+      <nav class="footer-links" aria-label="Footer quick links">
+        <section class="footer-link-group"><h2>Facility</h2><a href="about.html">About</a><a href="people.html">People</a><a href="instruments.html">Instruments</a></section>
+        <section class="footer-link-group"><h2>Bookings &amp; resources</h2><a href="booking.html">Book a slot</a><a href="workshops.html">Events &amp; Workshop</a><a href="forms-resources.html">Forms &amp; Resources</a><a href="data-analysis.html">Data Analysis</a></section>
+        <section class="footer-link-group"><h2>Contact &amp; staff</h2><a href="contact.html">Contact</a><a href="admin.html">Staff admin login</a></section>
       </nav>
     </div>
     <div class="container footer-bottom"><span>© 2026 Divisional FACS Facility, IISc</span><a href="https://www.iisc.ac.in/" target="_blank" rel="noreferrer">Indian Institute of Science ↗</a></div>

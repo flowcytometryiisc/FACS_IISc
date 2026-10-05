@@ -297,15 +297,19 @@ main section[id],main [id]{scroll-margin-top:20px}
 .map-hint b{font-size:13px}
 
 footer{padding:10px 0 8px;background:#041f40;color:#c1d0e1}
-.footer-top{display:flex;align-items:center;justify-content:space-between;gap:20px}
-.footer-brand{display:flex;align-items:center;gap:7px;flex:none}
-.footer-brand .brand-logo{position:relative;display:grid;place-items:center;width:24px;height:24px;border:1px solid #afcbe8;border-radius:50%;color:#d7e9f4;font:800 6px Manrope,Inter,sans-serif}
-.footer-brand strong,.footer-brand span{display:block}
-.footer-brand strong{color:#fff;font:700 8px Manrope,Inter,sans-serif}
-.footer-brand span{color:#adc2d2;font-size:6px}
-.footer-links{display:flex;flex-wrap:wrap;gap:13px;color:#d0dce6;font-size:7px}
+.footer-top{display:grid;grid-template-columns:minmax(150px,.8fr) minmax(0,2fr);align-items:start;gap:24px}
+.footer-brand{display:flex;align-items:center;gap:10px;min-width:0}
+.footer-seal{width:38px;height:38px;flex:none;object-fit:contain}
+.footer-brand-copy{display:block;min-width:0}
+.footer-brand strong,.footer-brand small{display:block}
+.footer-brand strong{color:#fff;font:700 9px Manrope,Inter,sans-serif}
+.footer-brand small{margin-top:3px;color:#adc2d2;font-size:7px}
+.footer-links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;color:#d0dce6}
+.footer-link-group{display:grid;align-content:start;gap:7px}
+.footer-link-group h2{margin:0 0 2px;color:#8fbbe4;font-size:8px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.footer-link-group a{width:fit-content;font-size:8px;line-height:1.35}
 .footer-links a:hover,.footer-bottom a:hover{color:#fff}
-.footer-bottom{display:flex;justify-content:space-between;gap:15px;margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,.13);color:#9db4c7;font-size:6px}
+.footer-bottom{display:flex;justify-content:space-between;gap:15px;margin-top:14px;padding-top:8px;border-top:1px solid rgba(255,255,255,.13);color:#9db4c7;font-size:6px}
 .footer-bottom a{color:#b8cbda}
 
 .page-container{width:min(1020px,calc(100% - 58px));margin-inline:auto}
@@ -694,8 +698,11 @@ footer{padding:10px 0 8px;background:#041f40;color:#c1d0e1}
   .map-card{grid-column:auto;min-height:110px}
   .contact-card-grid{grid-template-columns:1fr 1fr}
   footer{padding:10px 0}
-  .footer-top{align-items:flex-start;flex-direction:column;gap:10px}
-  .footer-links{gap:10px}
+  .footer-top{grid-template-columns:1fr;gap:18px}
+  .footer-links{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+  .footer-link-group{gap:7px}
+  .footer-link-group h2{font-size:8px}
+  .footer-link-group a{font-size:8px}
   .footer-bottom{align-items:flex-start;flex-direction:column;gap:4px}
   .page-container{width:calc(100% - 30px)}
   .page-hero{padding:27px 0 24px}
@@ -865,12 +872,15 @@ body{grid-template-columns:248px minmax(0,1fr);font-size:15px;line-height:1.65}
 .map-card{min-height:190px}
 .map-label strong{font-size:12px}
 .map-label span,.map-hint{font-size:10px}
-.footer-top{gap:28px}
-footer{padding:28px 0 20px}
-.footer-brand .brand-logo{width:38px;height:38px;font-size:9px}
+.footer-top{grid-template-columns:minmax(190px,.8fr) minmax(0,2fr);gap:36px}
+footer{padding:32px 0 22px}
+.footer-seal{width:52px;height:52px}
 .footer-brand strong{font-size:13px}
-.footer-brand span{font-size:10px}
-.footer-links{gap:16px;font-size:11px}
+.footer-brand small{font-size:10px}
+.footer-links{gap:24px}
+.footer-link-group{gap:10px}
+.footer-link-group h2{font-size:10px}
+.footer-link-group a{font-size:11px}
 .footer-bottom{margin-top:20px;padding-top:12px;font-size:10px}
 .page-hero{padding:62px 0 54px}
 .page-hero h1{font-size:clamp(38px,4.4vw,56px);letter-spacing:-1.2px}
@@ -1064,8 +1074,11 @@ main section[id],main [id]{scroll-margin-top:28px}
   .booking-card,.contact-card{min-height:150px;padding:18px}
   .map-card{grid-column:auto;min-height:150px}
   .contact-card-grid{grid-template-columns:1fr 1fr}
-  .footer-top{align-items:flex-start;flex-direction:column;gap:18px}
-  .footer-links{gap:12px;font-size:10px}
+  .footer-top{grid-template-columns:1fr;gap:18px}
+  .footer-links{grid-template-columns:1fr;gap:16px}
+  .footer-link-group{gap:8px}
+  .footer-link-group h2{font-size:9px}
+  .footer-link-group a{font-size:10px}
   .footer-bottom{align-items:flex-start;flex-direction:column;gap:7px}
   .page-hero{padding:42px 0 36px}
   .page-hero h1{font-size:36px}
