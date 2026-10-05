@@ -16,6 +16,7 @@ if (adminPortal) {
   const calendarStatus = adminPortal.querySelector("#admin-calendar-status");
   const calendarEvents = adminPortal.querySelector("#admin-calendar-events");
   const calendarInstrumentFilter = adminPortal.querySelector("#admin-calendar-instrument");
+  const closureList = adminPortal.querySelector("#admin-closure-list");
   const brownBearAdminLink = adminPortal.querySelector("#admin-brownbear-admin");
   const editDialog = document.querySelector("#admin-edit-booking");
   const editForm = document.querySelector("#admin-edit-form");
@@ -27,6 +28,7 @@ if (adminPortal) {
   let editingBookingId = "";
   let creatingBooking = false;
   let currentCalendarEvents = [];
+  let calendarClosures = [];
   let calendarFetchedAt = "";
   let selectedCalendarDate = "";
   let calendarRequestId = 0;
@@ -171,18 +173,21 @@ if (adminPortal) {
 
   function filteredCalendarEvents() {
     const instrument = calendarInstrumentFilter.value;
-    return currentCalendarEvents.filter(event => !instrument || event.instrument === instrument);
+    return currentCalendarEvents.filter(event =>
+      !instrument || !event.instrument || event.instrument === instrument
+    );
   }
 
   function updateCalendarStatus() {
     const brownBearCount = currentCalendarEvents.filter(event => event.source === "calendar").length;
     const portalCount = currentCalendarEvents.filter(event => event.source === "portal").length;
+    const closureCount = currentCalendarEvents.filter(event => event.source === "admin_closure").length;
     const filteredCount = filteredCalendarEvents().length;
     const instrument = calendarInstrumentFilter.value;
     const updated = calendarFetchedAt
       ? new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(new Date(calendarFetchedAt))
       : "";
-    calendarStatus.textContent = `${brownBearCount} Brown Bear events · ${portalCount} website sessions${instrument ? ` · Showing ${filteredCount} for ${instrument}` : ""}${updated ? ` · Synced ${updated}` : ""}`;
+    calendarStatus.textContent = `${brownBearCount} Brown Bear events · ${portalCount} website sessions · ${closureCount} closure dates${instrument ? ` · Showing ${filteredCount} for ${instrument}` : ""}${updated ? ` · Synced ${updated}` : ""}`;
   }
 
   function renderCalendarEvents() {
@@ -227,7 +232,7 @@ if (adminPortal) {
       const colorDots = [...new Set(dayEvents.map(event => event.color || "neutral"))].slice(0, 4)
         .map(color => `<i class="admin-calendar-dot" data-instrument-color="${escapeHTML(color)}" aria-hidden="true"></i>`).join("");
       const previews = dayEvents.slice(0, 2).map(event => `
-        <span class="admin-calendar-mini-event ${event.source === "portal" ? "portal" : "brown-bear"}" data-instrument-color="${escapeHTML(event.color || "neutral")}" title="${escapeHTML(`${event.time || "Time not listed"} · ${event.instrument || "Unassigned instrument"} · ${event.title || "Facility calendar event"}`)}">
+        <span class="admin-calendar-mini-event ${event.source === "portal" ? "portal" : event.source === "admin_closure" ? escapeHTML(event.eventType) : "brown-bear"}" data-instrument-color="${escapeHTML(event.color || "neutral")}" title="${escapeHTML(`${event.time || "Time not listed"} · ${event.instrument || event.eventType || "Unassigned instrument"} · ${event.title || "Facility calendar event"}`)}">
           <span>${escapeHTML((event.time || "").split(" - ")[0] || "All day")}</span> ${escapeHTML(event.instrument || event.title || "Facility event")}
         </span>`).join("");
       const more = dayEvents.length > 2 ? `<span class="admin-calendar-more">+${dayEvents.length - 2} more</span>` : "";
@@ -250,10 +255,10 @@ if (adminPortal) {
       <section class="admin-calendar-agenda" aria-labelledby="admin-calendar-agenda-title">
         <div class="admin-calendar-agenda-heading"><div><span class="eyebrow">SELECTED DAY</span><h4 id="admin-calendar-agenda-title">${escapeHTML(formatDate(selectedCalendarDate))}</h4></div><span class="admin-calendar-agenda-count">${selectedEvents.length} ${selectedEvents.length === 1 ? "event" : "events"}</span></div>
         ${selectedEvents.length ? `<div class="admin-calendar-agenda-list">${selectedEvents.map(event => `
-          <article class="admin-agenda-event ${event.source === "portal" ? "portal" : "brown-bear"}" data-instrument-color="${escapeHTML(event.color || "neutral")}">
+          <article class="admin-agenda-event ${event.source === "portal" ? "portal" : event.source === "admin_closure" ? escapeHTML(event.eventType) : "brown-bear"}" data-instrument-color="${escapeHTML(event.color || "neutral")}">
             <time>${escapeHTML(event.time || "Time not listed")}</time><span class="admin-agenda-event-color" aria-hidden="true"></span>
-            <div class="admin-agenda-event-info"><strong>${escapeHTML(event.title || "Facility calendar event")}</strong><small>${escapeHTML(event.instrument || "Unassigned instrument")} · ${event.source === "portal" ? "Website booking" : "Brown Bear · managed externally"}</small></div>
-            ${event.source === "portal" && event.bookingId ? `<div class="admin-agenda-actions"><button class="admin-detail-button" type="button" data-booking-edit="${escapeHTML(event.bookingId)}">Edit</button><button class="admin-delete-button" type="button" data-booking-delete="${escapeHTML(event.bookingId)}">Delete</button></div>` : '<span class="admin-external-badge">External</span>'}
+            <div class="admin-agenda-event-info"><strong>${escapeHTML(event.title || "Facility calendar event")}</strong><small>${event.source === "portal" ? `${escapeHTML(event.instrument)} · Website booking` : event.source === "admin_closure" ? `${event.eventType === "exception" ? "Exception holiday" : "Workshop holiday"} · Staff-managed` : `${escapeHTML(event.instrument || "Unassigned instrument")} · Brown Bear · managed externally`}</small></div>
+            ${event.source === "portal" && event.bookingId ? `<div class="admin-agenda-actions"><button class="admin-detail-button" type="button" data-booking-edit="${escapeHTML(event.bookingId)}">Edit</button><button class="admin-delete-button" type="button" data-booking-delete="${escapeHTML(event.bookingId)}">Delete</button></div>` : event.source === "admin_closure" && event.closureId ? `<button class="admin-delete-button" type="button" data-calendar-closure-delete="${escapeHTML(event.closureId)}">Remove</button>` : '<span class="admin-external-badge">External</span>'}
           </article>`).join("")}</div>` : `<div class="admin-calendar-day-empty">No events for ${escapeHTML(filterLabel)} on this day.</div>`}
       </section>`;
   }
@@ -292,11 +297,38 @@ if (adminPortal) {
     dashboardStatus.textContent = `${bookings.length} booking${bookings.length === 1 ? "" : "s"} · Updated ${new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(new Date())}`;
   }
 
+  function renderCalendarClosures() {
+    if (!calendarClosures.length) {
+      closureList.innerHTML = '<p class="admin-status">No upcoming staff-managed closures.</p>';
+      return;
+    }
+    closureList.innerHTML = calendarClosures.map(closure => {
+      const dates = closure.startDate === closure.endDate
+        ? formatDate(closure.startDate)
+        : `${formatDate(closure.startDate)} – ${formatDate(closure.endDate)}`;
+      const times = closure.slotTimes.length
+        ? closure.slotTimes.map(formatTimeSlot).join(", ")
+        : "All sessions";
+      const label = closure.type === "exception" ? "Exception holiday" : "Workshop holiday";
+      return `<article class="admin-closure-item ${escapeHTML(closure.type)}">
+        <div><span>${escapeHTML(label)} · ${escapeHTML(dates)} · ${escapeHTML(times)}</span><strong>${escapeHTML(closure.remark)}</strong></div>
+        <button class="admin-delete-button" type="button" data-closure-delete="${escapeHTML(closure.id)}">Remove</button>
+      </article>`;
+    }).join("");
+  }
+
+  async function loadCalendarClosures() {
+    const payload = await fetchJSON(`${apiBase}/admin/calendar-closures`, { cache: "no-store" });
+    calendarClosures = payload.closures;
+    renderCalendarClosures();
+  }
+
   async function loadDashboard() {
-    const [bookingResult, calendarResult, instrumentsResult] = await Promise.allSettled([
+    const [bookingResult, calendarResult, instrumentsResult, closuresResult] = await Promise.allSettled([
       loadBookings(),
       loadFacilityCalendar(),
       fetchJSON(`${apiBase}/instruments`, { cache: "no-store" }),
+      loadCalendarClosures(),
     ]);
     if (instrumentsResult.status === "fulfilled") {
       instruments = instrumentsResult.value;
@@ -310,6 +342,7 @@ if (adminPortal) {
     else dashboardStatus.textContent = `Instrument options could not be loaded: ${instrumentsResult.reason.message}`;
     if (bookingResult.status === "rejected") dashboardStatus.textContent = bookingResult.reason.message;
     if (calendarResult.status === "rejected") calendarStatus.textContent = calendarResult.reason.message;
+    if (closuresResult.status === "rejected") closureList.innerHTML = `<p class="admin-status">${escapeHTML(closuresResult.reason.message)}</p>`;
   }
 
   async function checkSession() {
@@ -567,7 +600,26 @@ if (adminPortal) {
       return;
     }
     const deleteButton = event.target.closest("[data-booking-delete]");
-    if (deleteButton) void deleteBooking(deleteButton.dataset.bookingDelete, deleteButton);
+    if (deleteButton) {
+      void deleteBooking(deleteButton.dataset.bookingDelete, deleteButton);
+      return;
+    }
+    const closureDeleteButton = event.target.closest("[data-calendar-closure-delete]");
+    if (closureDeleteButton) {
+      if (!window.confirm("Remove this calendar closure? Bookings may become available again.")) return;
+      closureDeleteButton.disabled = true;
+      void (async () => {
+        try {
+          await fetchJSON(`${apiBase}/admin/calendar-closures/${encodeURIComponent(closureDeleteButton.dataset.calendarClosureDelete)}`, {
+            method: "DELETE",
+          });
+          await Promise.all([loadCalendarClosures(), loadFacilityCalendar()]);
+        } catch (error) {
+          dashboardStatus.textContent = error.message;
+          closureDeleteButton.disabled = false;
+        }
+      })();
+    }
   });
 
   bookingList.addEventListener("click", async event => {
@@ -633,6 +685,78 @@ if (adminPortal) {
   document.querySelector("[data-close-admin-detail]").addEventListener("click", () => detailDialog.close());
   detailDialog.addEventListener("click", event => {
     if (event.target === detailDialog) detailDialog.close();
+  });
+
+  const today = facilityDateOffset();
+  adminPortal.querySelectorAll("[data-closure-toggle]").forEach(toggle => {
+    const form = adminPortal.querySelector(`[data-closure-form="${toggle.dataset.closureToggle}"]`);
+    toggle.setAttribute("aria-expanded", "false");
+    form.querySelectorAll('input[type="date"]').forEach(input => { input.min = today; });
+    toggle.addEventListener("change", () => {
+      form.hidden = !toggle.checked;
+      toggle.setAttribute("aria-expanded", String(toggle.checked));
+    });
+    const scope = form.querySelector("[data-closure-scope]");
+    const timesFieldset = form.querySelector("[data-closure-times]");
+    scope.addEventListener("change", () => {
+      timesFieldset.hidden = scope.value !== "specific";
+      if (scope.value === "all") {
+        timesFieldset.querySelectorAll('input[type="checkbox"]').forEach(input => { input.checked = false; });
+      }
+    });
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      const status = form.querySelector("[data-closure-status]");
+      const submitButton = form.querySelector('[type="submit"]');
+      const slotTimes = scope.value === "specific"
+        ? [...timesFieldset.querySelectorAll('input[type="checkbox"]:checked')].map(input => input.value)
+        : [];
+      if (scope.value === "specific" && !slotTimes.length) {
+        status.textContent = "Select at least one time slot.";
+        return;
+      }
+      const values = new FormData(form);
+      status.textContent = "Saving closure…";
+      submitButton.disabled = true;
+      try {
+        await fetchJSON(`${apiBase}/admin/calendar-closures`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: form.dataset.closureForm,
+            startDate: values.get("startDate"),
+            endDate: values.get("endDate"),
+            scope: scope.value,
+            slotTimes,
+            remark: values.get("remark"),
+          }),
+        });
+        form.reset();
+        scope.dispatchEvent(new Event("change"));
+        await Promise.all([loadCalendarClosures(), loadFacilityCalendar()]);
+        status.textContent = "Closure saved and added to the public schedule.";
+      } catch (error) {
+        status.textContent = error.message;
+      } finally {
+        submitButton.disabled = false;
+      }
+    });
+  });
+
+  closureList.addEventListener("click", async event => {
+    const button = event.target.closest("[data-closure-delete]");
+    if (!button) return;
+    if (!window.confirm("Remove this calendar closure? Bookings may become available again.")) return;
+    button.disabled = true;
+    try {
+      await fetchJSON(`${apiBase}/admin/calendar-closures/${encodeURIComponent(button.dataset.closureDelete)}`, {
+        method: "DELETE",
+      });
+      await Promise.all([loadCalendarClosures(), loadFacilityCalendar()]);
+    } catch (error) {
+      dashboardStatus.textContent = error.message;
+      button.disabled = false;
+    }
   });
 
   const now = new Date();

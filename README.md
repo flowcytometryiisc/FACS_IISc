@@ -68,6 +68,11 @@ IISc holiday dates are displayed separately from session entries; Brown Bear
 entries on those dates are omitted from this site's calendar and availability.
 Public bookings remain blocked. Authenticated facility staff can create or
 reschedule an emergency booking on a holiday through the admin portal.
+Facility staff can also add date-range exception and workshop closures from the
+admin portal. Each closure applies to all sessions or selected time slots,
+requires a public-calendar remark, blocks matching public bookings, and can be
+removed by staff. The homepage calendar distinguishes these closures from
+official IISc holidays, and SQLite/local and Supabase deployments persist them.
 The staff portal labels Brown Bear events as externally managed and links to
 Brown Bear's separate admin sign-in. Authorized staff can edit or delete those
 legacy events there; website bookings can be rescheduled or deleted in this
@@ -85,11 +90,13 @@ The Flask API exposes:
 - `GET /api/health`
 - `GET /api/instruments`
 - `GET /api/content`
-- `GET /api/calendar?month=YYYY-MM` (Brown Bear schedule plus pending/confirmed portal sessions)
+- `GET /api/calendar?month=YYYY-MM` (Brown Bear schedule, website bookings, IISc holidays and staff closures)
 - `GET /api/booking-availability?start=YYYY-MM-DD&end=YYYY-MM-DD`
 - `POST /api/bookings` (multipart booking details and completed PDF form)
 - `POST /api/admin/login`, `POST /api/admin/logout`
 - `GET /api/admin/bookings`, `GET /api/admin/calendar?month=YYYY-MM`
+- `GET /api/admin/calendar-closures`, `POST /api/admin/calendar-closures`
+- `DELETE /api/admin/calendar-closures/<id>`
 - `POST /api/admin/bookings` (create a confirmed staff booking)
 - `PUT /api/admin/bookings/<id>` (edit booking details and sessions)
 - `PATCH /api/admin/bookings/<id>` (change booking status)

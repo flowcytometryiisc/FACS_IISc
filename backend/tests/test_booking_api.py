@@ -967,6 +967,117 @@ class BookingApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("2027", response.get_json()["error"])
 
+    def test_admin_workshop_closure_blocks_selected_slots_and_updates_calendar(self):
+        self.assertEqual(
+            self.client.get("/api/admin/calendar-closures").status_code, 401
+        )
+        self.sign_in()
+        closure_data = {
+            "type": "workshop",
+            "startDate": self.slot["date"],
+            "endDate": self.slot["date"],
+            "scope": "specific",
+            "slotTimes": ["10:00-11:00"],
+            "remark": "Laser safety workshop",
+        }
+        no_csrf = self.client.post(
+            "/api/admin/calendar-closures", json=closure_data
+        )
+        self.assertEqual(no_csrf.status_code, 401)
+
+        created = self.client.post(
+            "/api/admin/calendar-closures",
+            json=closure_data,
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(created.status_code, 201)
+        closure = created.get_json()["closure"]
+        self.assertEqual(closure["type"], "workshop")
+        self.assertEqual(closure["slotTimes"], ["10:00-11:00"])
+
+        availability = self.client.get(
+            f"/api/booking-availability?start={self.slot['date']}&end={self.slot['date']}"
+        ).get_json()
+        blocked = next(
+            slot for slot in availability["unavailable"]
+            if slot["time"] == "10:00-11:00"
+        )
+        self.assertEqual(blocked["reason"], "workshop_closure")
+        self.assertEqual(blocked["remark"], "Laser safety workshop")
+        self.assertNotIn(
+            ("11:00-12:00", "workshop_closure"),
+            {(slot["time"], slot["reason"]) for slot in availability["unavailable"]},
+        )
+
+        calendar = self.client.get(
+            f"/api/calendar?month={self.slot['date'][:7]}"
+        ).get_json()
+        closure_events = [
+            event for event in calendar["events"]
+            if event["source"] == "admin_closure"
+        ]
+        self.assertEqual(len(closure_events), 1)
+        self.assertEqual(closure_events[0]["title"], "Laser safety workshop")
+        self.assertEqual(closure_events[0]["eventType"], "workshop")
+        self.assertEqual(closure_events[0]["time"], "10:00-11:00")
+        admin_calendar = self.client.get(
+            f"/api/admin/calendar?month={self.slot['date'][:7]}"
+        )
+        self.assertEqual(admin_calendar.status_code, 200)
+        self.assertTrue(any(
+            event["source"] == "admin_closure"
+            and event["title"] == "Laser safety workshop"
+            for event in admin_calendar.get_json()["events"]
+        ))
+
+        rejected_booking = self.client.post(
+            "/api/bookings",
+            data=self.booking_data({**self.slot, "time": "10:00-11:00"}),
+        )
+        self.assertEqual(rejected_booking.status_code, 409)
+        self.assertIn("Laser safety workshop", rejected_booking.get_json()["error"])
+
+        listed = self.client.get("/api/admin/calendar-closures").get_json()["closures"]
+        self.assertEqual([item["id"] for item in listed], [closure["id"]])
+        removed = self.client.delete(
+            f"/api/admin/calendar-closures/{closure['id']}",
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(removed.status_code, 200)
+        self.assertEqual(
+            self.client.delete(
+                f"/api/admin/calendar-closures/{closure['id']}",
+                headers=self.admin_headers(),
+            ).status_code,
+            404,
+        )
+
+    def test_admin_exception_closure_can_block_all_slots_across_date_range(self):
+        self.sign_in()
+        second_date = date.fromisoformat(self.slot["date"]) + timedelta(days=1)
+        created = self.client.post(
+            "/api/admin/calendar-closures",
+            json={
+                "type": "exception",
+                "startDate": self.slot["date"],
+                "endDate": second_date.isoformat(),
+                "scope": "all",
+                "slotTimes": [],
+                "remark": "Facility maintenance",
+            },
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(created.status_code, 201)
+        for slot_date in (self.slot["date"], second_date.isoformat()):
+            availability = self.client.get(
+                f"/api/booking-availability?start={slot_date}&end={slot_date}"
+            ).get_json()
+            closure_slots = [
+                slot for slot in availability["unavailable"]
+                if slot["reason"] == "exception_closure"
+            ]
+            self.assertEqual(len(closure_slots), len(facility_app.BOOKING_SLOTS))
+
     def test_admin_login_rejects_incorrect_password(self):
         response = self.client.post("/api/admin/login", json={"password": "wrong"})
         self.assertEqual(response.status_code, 401)

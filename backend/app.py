@@ -208,6 +208,17 @@ def booking_connection():
             form_path TEXT NOT NULL
         )
     """)
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS calendar_closures (
+            id TEXT PRIMARY KEY,
+            kind TEXT NOT NULL CHECK (kind IN ('exception', 'workshop')),
+            start_date TEXT NOT NULL,
+            end_date TEXT NOT NULL,
+            slot_times TEXT NOT NULL,
+            remark TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
     schema_row = connection.execute(
         "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'bookings'"
     ).fetchone()
@@ -258,6 +269,8 @@ class PostgresBookingConnection:
         values = list(parameters)
         if "INSERT INTO bookings" in statement and len(values) > 9:
             values[9] = self.jsonb_type(json.loads(values[9]))
+        elif "INSERT INTO calendar_closures" in statement and len(values) > 4:
+            values[4] = self.jsonb_type(json.loads(values[4]))
         elif "UPDATE bookings SET" in statement and "slots = ?" in statement:
             slot_value_index = statement.split("slots = ?", 1)[0].count("?")
             values[slot_value_index] = self.jsonb_type(
@@ -613,6 +626,55 @@ def iisc_holidays_between(start_date, end_date):
     ]
 
 
+def closure_row(row):
+    slot_times = row["slot_times"]
+    return {
+        "id": row["id"],
+        "type": row["kind"],
+        "startDate": row["start_date"],
+        "endDate": row["end_date"],
+        "slotTimes": json.loads(slot_times) if isinstance(slot_times, str) else slot_times,
+        "remark": row["remark"],
+        "createdAt": row["created_at"],
+    }
+
+
+def calendar_closures_between(connection, start_date, end_date):
+    rows = connection.execute(
+        """SELECT id, kind, start_date, end_date, slot_times, remark, created_at
+           FROM calendar_closures
+           WHERE start_date <= ? AND end_date >= ?
+           ORDER BY start_date, created_at""",
+        (end_date.isoformat(), start_date.isoformat()),
+    ).fetchall()
+    return [closure_row(row) for row in rows]
+
+
+def calendar_closure_events(closures, start_date, end_date):
+    events = []
+    for closure in closures:
+        first = max(start_date, date.fromisoformat(closure["startDate"]))
+        last = min(end_date, date.fromisoformat(closure["endDate"]))
+        current = first
+        while current <= last:
+            events.append({
+                "date": current.isoformat(),
+                "time": (
+                    "All day" if not closure["slotTimes"]
+                    else ", ".join(closure["slotTimes"])
+                ),
+                "title": closure["remark"],
+                "instrument": "",
+                "color": "exception" if closure["type"] == "exception" else "workshop",
+                "source": "admin_closure",
+                "eventType": closure["type"],
+                "closureId": closure["id"],
+                "slotTimes": closure["slotTimes"],
+            })
+            current += timedelta(days=1)
+    return events
+
+
 def iisc_holiday_for_date(slot_date):
     calendar = iisc_holiday_calendar()
     return next(
@@ -899,6 +961,7 @@ def get_booking_availability():
         rows = connection.execute(
             "SELECT slots, status FROM bookings WHERE status IN ('pending', 'confirmed')"
         ).fetchall()
+        closures = calendar_closures_between(connection, start_date, end_date)
     finally:
         connection.close()
 
@@ -906,6 +969,24 @@ def get_booking_availability():
     unavailable_by_key = {}
     holidays = iisc_holidays_between(start_date, end_date)
     known_holiday_years = set(iisc_holiday_calendar()["years"])
+    closure_blocks = {}
+    for closure in closures:
+        closure_times = closure["slotTimes"] or BOOKING_SLOTS
+        for day_offset in range(
+            (end_date - start_date).days + 1
+        ):
+            slot_date = (start_date + timedelta(days=day_offset)).isoformat()
+            if not closure["startDate"] <= slot_date <= closure["endDate"]:
+                continue
+            for time in closure_times:
+                closure_blocks[(slot_date, time)] = {
+                    "reason": f"{closure['type']}_closure",
+                    "closure": {
+                        "id": closure["id"],
+                        "type": closure["type"],
+                        "remark": closure["remark"],
+                    },
+                }
     now = facility_now()
     instrument_records = {item["name"]: item for item in instruments}
     for row in rows:
@@ -984,8 +1065,16 @@ def get_booking_availability():
                 (slot_date.isoformat(), time): "weekend"
                 for time in BOOKING_SLOTS
             })
+    unavailable_by_key.update({
+        key: value["reason"] for key, value in closure_blocks.items()
+    })
     unavailable_slots.extend(
-        {"date": slot_date, "time": time, "reason": reason}
+        {
+            "date": slot_date,
+            "time": time,
+            "reason": reason,
+            **(closure_blocks.get((slot_date, time), {}).get("closure", {})),
+        }
         for (slot_date, time), reason in unavailable_by_key.items()
     )
     response = jsonify({
@@ -995,6 +1084,7 @@ def get_booking_availability():
         "unavailable": unavailable_slots,
         "holidays": holidays,
         "holidayCalendarYears": sorted(known_holiday_years),
+        "closures": calendar_closure_events(closures, start_date, end_date),
     })
     response.headers["Cache-Control"] = "no-store"
     return response
@@ -1092,6 +1182,32 @@ def create_booking():
             return jsonify({"error": "Remove duplicate session slots before booking."}), 400
         seen_slots.add(slot_key)
         normalized_slots.append(normalized)
+
+    connection = booking_connection()
+    try:
+        closures = calendar_closures_between(
+            connection,
+            min(date.fromisoformat(slot["date"]) for slot in normalized_slots),
+            max(date.fromisoformat(slot["date"]) for slot in normalized_slots),
+        )
+    finally:
+        connection.close()
+    for slot in normalized_slots:
+        closure = next(
+            (
+                item for item in closures
+                if item["startDate"] <= slot["date"] <= item["endDate"]
+                and (not item["slotTimes"] or slot["time"] in item["slotTimes"])
+            ),
+            None,
+        )
+        if closure:
+            return jsonify({
+                "error": (
+                    f"This session is blocked for {closure['type']}: "
+                    f"{closure['remark']}"
+                )
+            }), 409
 
     try:
         booking_start = min(date.fromisoformat(slot["date"]) for slot in normalized_slots)
@@ -1317,8 +1433,20 @@ def get_admin_calendar():
         rows = connection.execute(
             "SELECT id, user_name, slots, status FROM bookings WHERE status IN ('pending', 'confirmed')"
         ).fetchall()
+        closures = calendar_closures_between(
+            connection,
+            month_start.date(),
+            (month_start.replace(day=28) + timedelta(days=4)).replace(day=1).date()
+            - timedelta(days=1),
+        )
     finally:
         connection.close()
+    events.extend(calendar_closure_events(
+        closures,
+        month_start.date(),
+        (month_start.replace(day=28) + timedelta(days=4)).replace(day=1).date()
+        - timedelta(days=1),
+    ))
     instrument_colors = {
         item["name"]: item.get("color", "gray") for item in load_json("instruments.json")
     }
@@ -1350,6 +1478,115 @@ def get_admin_calendar():
     })
     response.headers["Cache-Control"] = "no-store"
     return response
+
+
+@app.get("/api/admin/calendar-closures")
+def get_admin_calendar_closures():
+    denied = require_admin()
+    if denied:
+        return denied
+    connection = booking_connection()
+    try:
+        rows = connection.execute(
+            """SELECT id, kind, start_date, end_date, slot_times, remark, created_at
+               FROM calendar_closures WHERE end_date >= ?
+               ORDER BY start_date, created_at""",
+            (facility_today().isoformat(),),
+        ).fetchall()
+    finally:
+        connection.close()
+    response = jsonify({"closures": [closure_row(row) for row in rows]})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.post("/api/admin/calendar-closures")
+def create_admin_calendar_closure():
+    denied = require_admin()
+    if denied:
+        return denied
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Submit the closure details as a JSON object."}), 400
+    kind = payload.get("type")
+    if kind not in ("exception", "workshop"):
+        return jsonify({"error": "Choose an exception holiday or workshop holiday."}), 400
+    start_text = payload.get("startDate")
+    end_text = payload.get("endDate")
+    try:
+        start_date = date.fromisoformat(start_text)
+        end_date = date.fromisoformat(end_text)
+        if start_date.isoformat() != start_text or end_date.isoformat() != end_text:
+            raise ValueError
+    except (TypeError, ValueError):
+        return jsonify({"error": "Provide valid start and end dates as YYYY-MM-DD."}), 400
+    if end_date < start_date or (end_date - start_date).days > 366:
+        return jsonify({"error": "The closure range must be inclusive and no longer than 367 days."}), 400
+    remark = payload.get("remark")
+    if not isinstance(remark, str) or not remark.strip() or len(remark.strip()) > 500:
+        return jsonify({"error": "Enter a remark of no more than 500 characters."}), 400
+    slot_times = payload.get("slotTimes")
+    if (
+        not isinstance(slot_times, list)
+        or any(not isinstance(time, str) or time not in BOOKING_SLOTS for time in slot_times)
+        or len(slot_times) != len(set(slot_times))
+        or len(slot_times) > len(BOOKING_SLOTS)
+    ):
+        return jsonify({"error": "Choose all sessions or a valid set of unique time slots."}), 400
+    if payload.get("scope") == "specific" and not slot_times:
+        return jsonify({"error": "Select at least one time slot for a specific-slot closure."}), 400
+    if payload.get("scope") not in ("all", "specific"):
+        return jsonify({"error": "Choose all slots or specific slots."}), 400
+    if payload["scope"] == "all" and slot_times:
+        return jsonify({"error": "All-slot closures must not include selected time slots."}), 400
+
+    closure = {
+        "id": f"CL-{secrets.token_hex(8).upper()}",
+        "type": kind,
+        "startDate": start_date.isoformat(),
+        "endDate": end_date.isoformat(),
+        "slotTimes": slot_times,
+        "remark": remark.strip(),
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+    }
+    connection = booking_connection()
+    try:
+        connection.execute(
+            """INSERT INTO calendar_closures
+               (id, kind, start_date, end_date, slot_times, remark, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                closure["id"],
+                closure["type"],
+                closure["startDate"],
+                closure["endDate"],
+                json.dumps(closure["slotTimes"]),
+                closure["remark"],
+                closure["createdAt"],
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    return jsonify({"closure": closure}), 201
+
+
+@app.delete("/api/admin/calendar-closures/<closure_id>")
+def delete_admin_calendar_closure(closure_id):
+    denied = require_admin()
+    if denied:
+        return denied
+    connection = booking_connection()
+    try:
+        cursor = connection.execute(
+            "DELETE FROM calendar_closures WHERE id = ?", (closure_id,)
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    if cursor.rowcount == 0:
+        return jsonify({"error": "The calendar closure was not found."}), 404
+    return jsonify({"deleted": True, "id": closure_id})
 
 
 @app.patch("/api/admin/bookings/<booking_id>")
@@ -1996,12 +2233,21 @@ def get_calendar():
     )
 
     portal_bookings_available = True
+    closures = []
+    month_start_date = month_start.date()
+    month_end_date = (
+        (month_start.replace(day=28) + timedelta(days=4))
+        .replace(day=1).date() - timedelta(days=1)
+    )
     try:
         connection = booking_connection()
         try:
             rows = connection.execute(
                 "SELECT slots, status FROM bookings WHERE status IN ('pending', 'confirmed')"
             ).fetchall()
+            closures = calendar_closures_between(
+                connection, month_start_date, month_end_date
+            )
         finally:
             connection.close()
     except (BookingConfigurationError, BookingDatabaseError, sqlite3.Error):
@@ -2009,6 +2255,9 @@ def get_calendar():
         rows = []
         portal_bookings_available = False
 
+    events.extend(calendar_closure_events(
+        closures, month_start_date, month_end_date
+    ))
     instrument_colors = {
         item["name"]: item.get("color", "gray") for item in load_json("instruments.json")
     }

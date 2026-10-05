@@ -1853,6 +1853,58 @@ main section[id],main [id]{scroll-margin-top:28px}
 .instrument-dialog-specifications{display:grid;gap:10px;margin:0;padding-left:21px;color:#35516c;font-size:14px;line-height:1.5}
 .instrument-dialog-specifications li::marker{color:#1678d1}
 .instrument-dialog-book{display:inline-flex;margin-top:20px}
+.admin-closure-manager{margin:18px 0}
+.admin-closure-manager .admin-calendar-heading{margin-bottom:13px}
+.admin-closure-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.admin-closure-card{min-width:0;padding:14px;border:1px solid #dce6ef;border-top:3px solid #8b5cf6;border-radius:10px;background:#fbfdff}
+.admin-closure-card.workshop{border-top-color:#0891b2}
+.admin-closure-toggle{display:flex;align-items:center;gap:10px;color:#264660;cursor:pointer}
+.admin-closure-toggle>input{position:relative;flex:none;width:36px;height:20px;margin:0;appearance:none;border:1px solid #c7d2de;border-radius:999px;background:#d9e2eb;cursor:pointer;transition:background .16s,border-color .16s}
+.admin-closure-toggle>input::after{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(21,45,67,.22);content:"";transition:transform .16s}
+.admin-closure-toggle>input:checked{border-color:#7149d5;background:#8059d6}
+.admin-closure-toggle>input:checked::after{transform:translateX(16px)}
+.admin-closure-toggle>input:focus-visible{outline:3px solid #a8d2f1;outline-offset:2px}
+.admin-closure-card.workshop .admin-closure-toggle>input:checked{border-color:#087f99;background:#078ba4}
+.admin-closure-toggle strong,.admin-closure-toggle small{display:block}
+.admin-closure-toggle strong{font-size:12px}
+.admin-closure-toggle small{margin-top:3px;color:#7b8fa2;font-size:10px;font-weight:500}
+.admin-closure-form{display:grid;gap:11px;margin-top:14px;padding-top:13px;border-top:1px solid #e5edf3}
+.admin-closure-form[hidden]{display:none}
+.admin-closure-form>label,.admin-closure-date-fields>label{display:grid;gap:5px;color:#294863;font-size:10px;font-weight:700}
+.admin-closure-form input:not([type="checkbox"]),.admin-closure-form select{width:100%;min-height:38px;padding:8px 9px;border:1px solid #d5e1eb;border-radius:7px;background:#fff;color:#25445f;font:500 11px Inter,Arial,sans-serif}
+.admin-closure-date-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.admin-closure-times{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:10px;border:1px solid #e0e8f0;border-radius:8px}
+.admin-closure-times[hidden]{display:none}
+.admin-closure-times legend{padding:0 5px;color:#547089;font-size:10px;font-weight:700}
+.admin-closure-times label{display:flex;align-items:center;gap:5px;color:#48637b;font-size:9px}
+.admin-closure-times input{accent-color:#1678d1}
+.admin-closure-form .admin-status{min-height:0;margin:0;font-size:10px}
+.admin-closure-list-wrap{margin-top:16px;padding-top:13px;border-top:1px solid #e8eef3}
+.admin-closure-list-wrap h4{margin:0 0 9px;color:#23445e;font:700 12px Manrope,Inter,sans-serif}
+.admin-closure-list{display:grid;gap:7px}
+.admin-closure-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 11px;border:1px solid #e4eaf0;border-left:3px solid #8b5cf6;border-radius:8px;background:#fcfbff}
+.admin-closure-item.workshop{border-left-color:#0891b2;background:#f5fcfd}
+.admin-closure-item>div{display:grid;gap:4px;min-width:0}
+.admin-closure-item span{color:#74869a;font-size:9px;font-weight:600}
+.admin-closure-item strong{overflow-wrap:anywhere;color:#2c4b64;font-size:11px}
+.home-month-day.exception-closure{border-color:#c9b8f5;background:#f7f2ff;box-shadow:inset 0 3px 0 #8059d6}
+.home-month-day.workshop-closure{border-color:#a8dce4;background:#effbfd;box-shadow:inset 0 3px 0 #078ba4}
+.home-month-day.exception-closure .home-month-day-number{color:#6240a7;font-weight:800}
+.home-month-day.workshop-closure .home-month-day-number{color:#08798f;font-weight:800}
+.home-month-day.exception-closure.holiday{background:linear-gradient(135deg,#fff7e4 0 50%,#f7f2ff 50%);box-shadow:inset 0 3px 0 #8059d6}
+.home-month-day.workshop-closure.holiday{background:linear-gradient(135deg,#fff7e4 0 50%,#effbfd 50%);box-shadow:inset 0 3px 0 #078ba4}
+.home-month-day.selected.exception-closure,.home-month-day.selected.workshop-closure{border-color:#4d9adb;box-shadow:inset 0 3px 0 currentColor,0 0 0 1px #4d9adb}
+.home-month-closure-tag{padding:2px 4px;border-radius:4px;font-size:6px;font-weight:900;letter-spacing:.035em;line-height:1.2}
+.home-month-closure-tag.exception{background:#e4d8fb;color:#573696}
+.home-month-closure-tag.workshop{background:#cceef2;color:#066c7e}
+.home-month-legend i[data-instrument-color="exception"],.home-month-event-mark[data-instrument-color="exception"]{background:#8059d6}
+.home-month-legend i[data-instrument-color="workshop"],.home-month-event-mark[data-instrument-color="workshop"]{background:#078ba4}
+.home-month-event[data-instrument-color="exception"]{border-color:#d7c9f5;background:#faf7ff}
+.home-month-event[data-instrument-color="workshop"]{border-color:#bce4e9;background:#f3fcfd}
+.admin-calendar-dot[data-instrument-color="exception"],.admin-calendar-mini-event[data-instrument-color="exception"],.admin-agenda-event[data-instrument-color="exception"]{--instrument-color:#8059d6}
+.admin-calendar-dot[data-instrument-color="workshop"],.admin-calendar-mini-event[data-instrument-color="workshop"],.admin-agenda-event[data-instrument-color="workshop"]{--instrument-color:#078ba4}
+.admin-calendar-mini-event[data-instrument-color="exception"],.admin-calendar-mini-event[data-instrument-color="workshop"]{border-left-color:var(--instrument-color);background:color-mix(in srgb,var(--instrument-color) 10%,white)}
+.admin-agenda-event[data-instrument-color="exception"],.admin-agenda-event[data-instrument-color="workshop"]{border-color:color-mix(in srgb,var(--instrument-color) 25%,white);background:color-mix(in srgb,var(--instrument-color) 5%,white)}
 @media(max-width:560px){
   .instrument-dialog{max-height:calc(100vh - 24px);padding:18px;border-radius:14px}
   .instrument-dialog-layout{grid-template-columns:1fr;gap:18px}
@@ -1860,4 +1912,6 @@ main section[id],main [id]{scroll-margin-top:28px}
   .instrument-dialog-image img{max-height:35vh}
   .instrument-dialog-header{margin-bottom:12px}
   .instrument-dialog-manufacturer{margin-bottom:18px}
+  .admin-closure-options{grid-template-columns:1fr}
+  .admin-closure-times{grid-template-columns:repeat(2,minmax(0,1fr))}
 }

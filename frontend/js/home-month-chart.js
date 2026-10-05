@@ -14,6 +14,7 @@ if (homeMonthOverview) {
   let selectedDate = localDateKey(weekdayInMonth(new Date(today)));
   let brownBearEvents = [];
   let holidayEvents = [];
+  let closureEvents = [];
   let portalSlots = [];
   let instruments = [];
   let monthStatus = { brownBear: "loading", portal: "loading" };
@@ -58,17 +59,23 @@ if (homeMonthOverview) {
 
   function eventsForDate(date) {
     return [
-      ...brownBearEvents.filter(event => event.date === date).map(event => ({
-        source: event.instrument ? `Brown Bear · ${event.instrument}` : "Brown Bear · Unassigned",
-        time: event.time || "Time not listed",
+      ...closureEvents.filter(event => event.date === date).map(event => ({
+        source: event.eventType === "exception" ? "Exception holiday" : "Workshop holiday",
+        time: event.time || "All day",
         title: event.title,
-        color: event.color || "neutral",
+        color: event.color,
       })),
       ...holidayEvents.filter(event => event.date === date).map(event => ({
         source: "IISc Holiday",
         time: event.time || "All day",
         title: event.title,
         color: "holiday",
+      })),
+      ...brownBearEvents.filter(event => event.date === date).map(event => ({
+        source: event.instrument ? `Brown Bear · ${event.instrument}` : "Brown Bear · Unassigned",
+        time: event.time || "Time not listed",
+        title: event.title,
+        color: event.color || "neutral",
       })),
       ...portalSlots.filter(slot => slot.date === date).map(slot => ({
         source: "Portal booking",
@@ -85,7 +92,7 @@ if (homeMonthOverview) {
     const monthDays = monthDayNumbers(year, month);
     const dayCounts = monthDays.map(day =>
       eventsForDate(`${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`)
-        .filter(event => event.source !== "IISc Holiday").length
+        .filter(event => !["IISc Holiday", "Exception holiday", "Workshop holiday"].includes(event.source)).length
     );
     const total = dayCounts.reduce((sum, count) => sum + count, 0);
     const busyDays = dayCounts.filter(count => count > 0).length;
@@ -138,6 +145,7 @@ if (homeMonthOverview) {
         date: value,
         live: brownBearEvents.filter(event => event.date === value).length,
         holidays: holidayEvents.filter(event => event.date === value),
+        closures: closureEvents.filter(event => event.date === value),
         byColor: [
           ...instruments.map(instrument => ({
             color: instrument.color,
@@ -162,12 +170,14 @@ if (homeMonthOverview) {
       const isToday = localDateKey(today) === item.date;
       const holidayCount = item.holidays.length;
       const holidayNames = item.holidays.map(event => event.title.replace(/^IISc Holiday · /, ""));
-      const title = `${formatDate(item.date, { weekday: "long", day: "numeric", month: "long" })}: ${item.live} Brown Bear calendar entries, ${item.portal} portal bookings${holidayCount ? `, IISc holiday: ${holidayNames.join(", ")}` : ""}`;
+      const exceptionClosures = item.closures.filter(event => event.eventType === "exception");
+      const workshopClosures = item.closures.filter(event => event.eventType === "workshop");
+      const title = `${formatDate(item.date, { weekday: "long", day: "numeric", month: "long" })}: ${item.live} Brown Bear calendar entries, ${item.portal} portal bookings${holidayCount ? `, IISc holiday: ${holidayNames.join(", ")}` : ""}${exceptionClosures.length ? `, exception holiday: ${exceptionClosures.map(event => event.title).join(", ")}` : ""}${workshopClosures.length ? `, workshop holiday: ${workshopClosures.map(event => event.title).join(", ")}` : ""}`;
       const bars = item.byColor.map(group =>
         `<i data-instrument-color="${escapeHTML(group.color)}" style="height:${Math.max(9, Math.round(group.count / maximum * 46))}px"></i>`
       ).join("");
-      return `<button type="button" class="home-month-day${selected ? " selected" : ""}${isToday ? " today" : ""}${holidayCount ? " holiday" : ""}" data-home-month-date="${item.date}" aria-pressed="${selected}" aria-label="${escapeHTML(title)}">
-        <span class="home-month-day-number">${day}</span><span class="home-month-bars" aria-hidden="true">${bars}</span>${holidayCount ? `<span class="home-month-holiday-tag" title="${escapeHTML(holidayNames.join(", "))}">HOLIDAY</span>` : ""}<span class="home-month-count">${total ? `${total} ${total === 1 ? "entry" : "entries"}` : "—"}</span>
+      return `<button type="button" class="home-month-day${selected ? " selected" : ""}${isToday ? " today" : ""}${holidayCount ? " holiday" : ""}${exceptionClosures.length ? " exception-closure" : ""}${workshopClosures.length ? " workshop-closure" : ""}" data-home-month-date="${item.date}" aria-pressed="${selected}" aria-label="${escapeHTML(title)}">
+        <span class="home-month-day-number">${day}</span><span class="home-month-bars" aria-hidden="true">${bars}</span>${holidayCount ? `<span class="home-month-holiday-tag" title="${escapeHTML(holidayNames.join(", "))}">HOLIDAY</span>` : ""}${exceptionClosures.length ? '<span class="home-month-closure-tag exception">EXCEPTION</span>' : ""}${workshopClosures.length ? '<span class="home-month-closure-tag workshop">WORKSHOP</span>' : ""}<span class="home-month-count">${total ? `${total} ${total === 1 ? "entry" : "entries"}` : "—"}</span>
       </button>`;
     }));
     const trailingDays = (7 - (cells.length % 7)) % 7;
@@ -193,6 +203,7 @@ if (homeMonthOverview) {
     if (monthStatus.brownBear === "loaded" && holidayEvents.length) {
       parts.push(`${holidayEvents.length} IISc holidays`);
     }
+    if (closureEvents.length) parts.push(`${closureEvents.length} staff closure dates`);
     if (monthStatus.portal === "loaded") parts.push(`${portalSlots.length} portal sessions`);
     else if (monthStatus.portal === "error") parts.push("Portal bookings could not be loaded");
     statusLabel.textContent = parts.join(" · ") || "Loading both live schedule sources…";
@@ -205,7 +216,7 @@ if (homeMonthOverview) {
     const colors = instruments.map(instrument =>
       `<span><i data-instrument-color="${escapeHTML(instrument.color)}"></i>${escapeHTML(instrument.name)}<small>${escapeHTML(instrument.colorCode || "")}</small></span>`
     );
-    legend.innerHTML = `<span><i data-instrument-color="neutral"></i>Unassigned</span>${colors.join("")}<span><i data-instrument-color="holiday"></i>IISc holiday</span>`;
+    legend.innerHTML = `<span><i data-instrument-color="neutral"></i>Unassigned</span>${colors.join("")}<span><i data-instrument-color="holiday"></i>IISc holiday</span><span><i data-instrument-color="exception"></i>Exception holiday</span><span><i data-instrument-color="workshop"></i>Workshop holiday</span>`;
   }
 
   async function loadMonth() {
@@ -216,6 +227,7 @@ if (homeMonthOverview) {
     const end = localDateKey(new Date(yearValue, monthValue, 0));
     brownBearEvents = [];
     holidayEvents = [];
+    closureEvents = [];
     portalSlots = [];
     monthStatus = { brownBear: "loading", portal: "loading" };
     renderDays();
@@ -233,9 +245,10 @@ if (homeMonthOverview) {
     if (calendarResult.status === "fulfilled" && calendarResult.value.month === month
       && Array.isArray(calendarResult.value.events)) {
       brownBearEvents = calendarResult.value.events.filter(event =>
-        event.source !== "portal" && event.source !== "holiday"
+        event.source !== "portal" && event.source !== "holiday" && event.source !== "admin_closure"
       );
       holidayEvents = calendarResult.value.events.filter(event => event.source === "holiday");
+      closureEvents = calendarResult.value.events.filter(event => event.source === "admin_closure");
       monthStatus.brownBear = "loaded";
     } else {
       monthStatus.brownBear = "error";

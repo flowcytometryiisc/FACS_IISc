@@ -149,12 +149,16 @@ if (bookingPortal) {
             .map(item => item.instrument),
         ]);
         const operatorLimit = !selected && !operatorBookings.has(instrument.name)
-          && (operatorBookings.size >= 2 || unavailableReason === "operator_limit");
+          && (operatorBookings.size >= 2 || unavailableReason?.reason === "operator_limit");
         const cleaning = existingBooking?.source === "cleaning";
         const selectableCleaning = selectedCleaning && !cleaning && !selected;
         const unavailable = Boolean(unavailableReason) || operatorLimit;
         const status = cleaning
           ? "Blocked for cleaning"
+          : unavailableReason?.type === "exception"
+            ? `Exception holiday · ${unavailableReason.remark}`
+            : unavailableReason?.type === "workshop"
+              ? `Workshop holiday · ${unavailableReason.remark}`
           : booked
             ? existingBooking.source === "calendar"
               ? "Booked · Facility calendar"
@@ -165,13 +169,13 @@ if (bookingPortal) {
                 ? "Continue sorter booking"
               : operatorLimit
                 ? "Operator limit reached"
-                : unavailableReason === "holiday"
+                : unavailableReason?.reason === "holiday"
                   ? `IISc Holiday · ${holidaysByDate.get(selectedDate)?.name || "Closed"}`
-                  : unavailableReason === "holiday_calendar_unavailable"
+                  : unavailableReason?.reason === "holiday_calendar_unavailable"
                     ? "IISc holiday list pending"
-                : unavailableReason === "started"
+                : unavailableReason?.reason === "started"
                   ? "Session started"
-                  : unavailableReason === "weekend"
+                  : unavailableReason?.reason === "weekend"
                     ? "Not bookable"
                     : unavailable ? "Unavailable" : "Available";
         const disabled = booked || cleaning || unavailable || availabilityRefreshing;
@@ -253,7 +257,7 @@ if (bookingPortal) {
       try {
       const payload = await fetchJSON(`${apiBase}/booking-availability?start=${start}&end=${end}`, { cache: "no-store" });
       bookedSlots = new Map(payload.booked.map(slot => [slotKey(slot), slot]));
-      unavailableSlots = new Map(payload.unavailable.map(slot => [`${slot.date}|${slot.time}`, slot.reason]));
+      unavailableSlots = new Map(payload.unavailable.map(slot => [`${slot.date}|${slot.time}`, slot]));
       holidaysByDate.clear();
       payload.holidays.forEach(holiday => holidaysByDate.set(holiday.date, holiday));
       holidayCalendarYears = new Set(payload.holidayCalendarYears);

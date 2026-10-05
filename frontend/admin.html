@@ -19,6 +19,38 @@
     <section class="admin-dashboard" id="admin-dashboard" hidden>
       <div class="admin-dashboard-header"><div><div class="eyebrow">FACILITY OPERATIONS</div><h2>Bookings</h2><p>Review requests, manage website bookings, and use Brown Bear’s own admin sign-in to change its legacy events.</p></div><div><button class="btn primary" type="button" id="admin-create-booking">Add booking</button> <button class="btn outline admin-logout" type="button" id="admin-logout">Sign out</button></div></div>
       <div class="admin-stats" id="admin-stats"></div>
+      <section class="admin-closure-manager booking-panel" aria-labelledby="admin-closures-title">
+        <div class="admin-calendar-heading"><div><span class="eyebrow">STAFF-MANAGED CLOSURES</span><h3 id="admin-closures-title">Exception &amp; workshop holidays</h3><p>Choose a date range and close all sessions or selected time slots. The remark appears on the public schedule.</p></div></div>
+        <div class="admin-closure-options">
+          <article class="admin-closure-card exception">
+            <label class="admin-closure-toggle"><input type="checkbox" data-closure-toggle="exception" aria-controls="admin-exception-form"><span><strong>Exception holiday</strong><small>Facility closure or an approved exception</small></span></label>
+            <form id="admin-exception-form" class="admin-closure-form" data-closure-form="exception" hidden>
+              <div class="admin-closure-date-fields"><label>From<input type="date" name="startDate" required></label><label>Through<input type="date" name="endDate" required></label></div>
+              <label>Sessions to block<select name="scope" data-closure-scope required><option value="all">All sessions</option><option value="specific">Specific sessions</option></select></label>
+              <fieldset class="admin-closure-times" data-closure-times hidden><legend>Select time slots</legend>
+                <label><input type="checkbox" value="10:00-11:00">10:00–11:00</label><label><input type="checkbox" value="11:00-12:00">11:00–12:00</label><label><input type="checkbox" value="12:00-13:00">12:00–13:00</label><label><input type="checkbox" value="14:00-15:00">14:00–15:00</label><label><input type="checkbox" value="15:00-16:00">15:00–16:00</label><label><input type="checkbox" value="16:00-17:00">16:00–17:00</label>
+              </fieldset>
+              <label>Remark<input name="remark" maxlength="500" required placeholder="Shown on the homepage calendar"></label>
+              <p class="admin-status" data-closure-status role="status" aria-live="polite"></p>
+              <button class="btn primary" type="submit">Add exception holiday</button>
+            </form>
+          </article>
+          <article class="admin-closure-card workshop">
+            <label class="admin-closure-toggle"><input type="checkbox" data-closure-toggle="workshop" aria-controls="admin-workshop-form"><span><strong>Workshop holiday</strong><small>Training, workshop, or facility event</small></span></label>
+            <form id="admin-workshop-form" class="admin-closure-form" data-closure-form="workshop" hidden>
+              <div class="admin-closure-date-fields"><label>From<input type="date" name="startDate" required></label><label>Through<input type="date" name="endDate" required></label></div>
+              <label>Sessions to block<select name="scope" data-closure-scope required><option value="all">All sessions</option><option value="specific">Specific sessions</option></select></label>
+              <fieldset class="admin-closure-times" data-closure-times hidden><legend>Select time slots</legend>
+                <label><input type="checkbox" value="10:00-11:00">10:00–11:00</label><label><input type="checkbox" value="11:00-12:00">11:00–12:00</label><label><input type="checkbox" value="12:00-13:00">12:00–13:00</label><label><input type="checkbox" value="14:00-15:00">14:00–15:00</label><label><input type="checkbox" value="15:00-16:00">15:00–16:00</label><label><input type="checkbox" value="16:00-17:00">16:00–17:00</label>
+              </fieldset>
+              <label>Remark<input name="remark" maxlength="500" required placeholder="Shown on the homepage calendar"></label>
+              <p class="admin-status" data-closure-status role="status" aria-live="polite"></p>
+              <button class="btn primary" type="submit">Add workshop holiday</button>
+            </form>
+          </article>
+        </div>
+        <div class="admin-closure-list-wrap"><h4>Upcoming closures</h4><div id="admin-closure-list" class="admin-closure-list"><p class="admin-status">Sign in to load calendar closures.</p></div></div>
+      </section>
       <section class="admin-calendar-panel booking-panel" aria-labelledby="admin-calendar-title">
         <div class="admin-calendar-heading"><div><span class="eyebrow">MONTH AT A GLANCE</span><h3 id="admin-calendar-title">Facility calendar</h3><p>Select a weekday to review and manage that day. Brown Bear events are read-only here.</p></div><div class="admin-calendar-controls"><button class="btn outline" id="admin-calendar-previous" type="button" aria-label="Previous month">←</button><label class="visually-hidden" for="admin-calendar-month">Month</label><input id="admin-calendar-month" type="month"><button class="btn outline" id="admin-calendar-next" type="button" aria-label="Next month">→</button><button class="btn outline" id="admin-calendar-refresh" type="button">↻ Sync</button></div></div>
         <div class="admin-calendar-toolbar"><label for="admin-calendar-instrument">Show instrument</label><select id="admin-calendar-instrument"><option value="">All instruments</option></select><div class="admin-calendar-legend"><span><i class="brown-bear"></i>Brown Bear · managed externally</span><span><i class="portal"></i>Website booking · editable here</span></div></div>
