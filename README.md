@@ -21,12 +21,14 @@ preview; the live schedule requires the backend to be running.
 - Team portraits stored with the People page assets
 - Individual supplied image tiles for the homepage, each page header, and the
   IISc seal and campus image in the sidebar
-- Homepage monthly overview chart with day-by-day Brown Bear calendar and portal
-  booking counts, daily details, month navigation and live refresh
-- IISc's published regular holiday list in the homepage schedule and booking
+- Authenticated admin dashboard with separate Bookings, Events & Workshops,
+  and Usage Statistics workspaces
+- Monthly usage overview in the admin portal with day-by-day Brown Bear calendar
+  and portal booking counts, daily details, month navigation and live refresh
+- IISc's published regular holiday list in the facility schedule and booking
   availability; restricted holidays are excluded
 - Live Brown Bear instrument category colors are mapped to the facility's
-  instrument palette in the homepage overview
+  instrument palette in the admin usage overview
 - Multi-instrument booking form with live slot availability, booking details,
   required completed user-form upload, pending staff review and slot conflict checks
 - Password-protected booking dashboard with an interactive weekday month grid,

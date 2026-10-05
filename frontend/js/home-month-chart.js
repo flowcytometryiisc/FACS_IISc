@@ -1,4 +1,5 @@
 const homeMonthOverview = document.querySelector("[data-home-month-overview]");
+const adminPortalContainer = document.querySelector("[data-admin-portal]");
 
 if (homeMonthOverview) {
   const apiBase = "/api";
@@ -292,5 +293,9 @@ if (homeMonthOverview) {
   });
 
   refreshButton.addEventListener("click", () => { void loadMonth(); });
-  void loadMonth();
+  if (adminPortalContainer) {
+    document.addEventListener("admin:statistics-opened", () => { void loadMonth(); });
+  } else {
+    void loadMonth();
+  }
 }

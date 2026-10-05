@@ -9,7 +9,7 @@
 </head>
 <body>
 <main class="inner-page">
-  <header class="page-hero hero-booking"><div class="page-container"><div class="eyebrow light">FACILITY STAFF</div><h1>Booking management</h1><p>Review the synced facility calendar and manage bookings made through this website.</p></div></header>
+  <header class="page-hero hero-booking"><div class="page-container"><div class="eyebrow light">FACILITY STAFF</div><h1>Admin dashboard</h1><p>Manage bookings, publish facility events and workshops, and review facility usage.</p></div></header>
   <section class="page-container content-section admin-portal" data-admin-portal>
     <section class="admin-login-panel booking-panel" id="admin-login-panel" aria-labelledby="admin-login-title">
       <span class="eyebrow">STAFF SIGN IN</span><h2 id="admin-login-title">Admin portal</h2><p>A fresh sign-in is required every time you open this page. Sessions end after 15 minutes of inactivity or when you leave.</p>
@@ -17,7 +17,13 @@
       <p class="admin-status" id="admin-login-status" role="status" aria-live="polite"></p>
     </section>
     <section class="admin-dashboard" id="admin-dashboard" hidden>
-      <div class="admin-dashboard-header"><div><div class="eyebrow">FACILITY OPERATIONS</div><h2>Bookings</h2><p>Review requests, manage website bookings, and use Brown Bear’s own admin sign-in to change its legacy events.</p></div><div><button class="btn primary" type="button" id="admin-create-booking">Add booking</button> <button class="btn outline admin-logout" type="button" id="admin-logout">Sign out</button></div></div>
+      <div class="admin-dashboard-header"><div><div class="eyebrow">FACILITY OPERATIONS</div><h2>Admin dashboard</h2><p>Choose a workspace to manage the facility.</p></div><button class="btn outline admin-logout" type="button" id="admin-logout">Sign out</button></div>
+      <nav class="admin-dashboard-cards" aria-label="Admin workspaces">
+        <button class="admin-dashboard-card active" type="button" data-admin-view-button="bookings" aria-controls="admin-bookings-view" aria-pressed="true"><span class="admin-dashboard-card-icon" aria-hidden="true">▦</span><span class="admin-dashboard-card-copy"><strong>Bookings</strong><small>Review requests, manage sessions and closures.</small></span><span class="admin-dashboard-card-arrow" aria-hidden="true">→</span></button>
+        <button class="admin-dashboard-card" type="button" data-admin-view-button="events" aria-controls="admin-events-view" aria-pressed="false"><span class="admin-dashboard-card-icon events" aria-hidden="true">✦</span><span class="admin-dashboard-card-copy"><strong>Events &amp; workshops</strong><small>Publish and manage facility announcements.</small></span><span class="admin-dashboard-card-arrow" aria-hidden="true">→</span></button>
+        <button class="admin-dashboard-card" type="button" data-admin-view-button="statistics" aria-controls="admin-statistics-view" aria-pressed="false"><span class="admin-dashboard-card-icon statistics" aria-hidden="true">↗</span><span class="admin-dashboard-card-copy"><strong>Usage statistics</strong><small>Explore monthly facility activity and demand.</small></span><span class="admin-dashboard-card-arrow" aria-hidden="true">→</span></button>
+      </nav>
+      <div class="admin-dashboard-view" id="admin-bookings-view" data-admin-view-panel="bookings">
       <div class="admin-stats" id="admin-stats"></div>
       <section class="admin-closure-manager booking-panel" aria-labelledby="admin-closures-title">
         <div class="admin-calendar-heading"><div><span class="eyebrow">STAFF-MANAGED CLOSURES</span><h3 id="admin-closures-title">Exception &amp; workshop holidays</h3><p>Choose a date range and close all sessions or selected time slots. The remark appears on the public schedule.</p></div></div>
@@ -51,8 +57,20 @@
         </div>
         <div class="admin-closure-list-wrap"><h4>Upcoming closures</h4><div id="admin-closure-list" class="admin-closure-list"><p class="admin-status">Sign in to load calendar closures.</p></div></div>
       </section>
+      <section class="admin-calendar-panel booking-panel" aria-labelledby="admin-calendar-title">
+        <div class="admin-calendar-heading"><div><span class="eyebrow">MONTH AT A GLANCE</span><h3 id="admin-calendar-title">Facility calendar</h3><p>Select a weekday to review and manage that day. Brown Bear events are read-only here.</p></div><div class="admin-calendar-controls"><button class="btn outline" id="admin-calendar-previous" type="button" aria-label="Previous month">←</button><label class="visually-hidden" for="admin-calendar-month">Month</label><input id="admin-calendar-month" type="month"><button class="btn outline" id="admin-calendar-next" type="button" aria-label="Next month">→</button><button class="btn outline" id="admin-calendar-refresh" type="button">↻ Sync</button></div></div>
+        <div class="admin-calendar-toolbar"><label for="admin-calendar-instrument">Show instrument</label><select id="admin-calendar-instrument"><option value="">All instruments</option></select><div class="admin-calendar-legend"><span><i class="brown-bear"></i>Brown Bear · managed externally</span><span><i class="portal"></i>Website booking · editable here</span></div></div>
+        <p id="admin-calendar-status" class="admin-status" role="status" aria-live="polite">Loading the synced facility calendar…</p>
+        <div id="admin-calendar-events" class="admin-calendar-workspace" aria-live="polite"></div>
+        <div class="admin-brownbear-access"><span>To edit or delete legacy events, open Brown Bear and sign in with its separate admin password.</span><a id="admin-brownbear-admin" class="admin-detail-button" href="https://www.brownbearsw.com/cal/flow_cytometry?Op=AdminPage" target="_blank" rel="noopener noreferrer">Open Brown Bear admin ↗</a></div>
+      </section>
+      <div class="admin-booking-toolbar"><label class="admin-search">Search bookings<input type="search" id="admin-search" placeholder="Name, PI, email or booking ID"></label><label>Filter by status<select id="admin-status-filter"><option value="all">All bookings</option><option value="pending">Pending review</option><option value="confirmed">Confirmed</option><option value="cancelled">Cancelled</option></select></label><button class="btn primary" type="button" id="admin-create-booking">Add booking</button><button class="btn outline" type="button" id="admin-refresh">↻ Refresh</button></div>
+      <p id="admin-dashboard-status" class="admin-status" role="status" aria-live="polite"></p>
+      <div id="admin-booking-list" class="admin-booking-list"></div>
+      </div>
+      <div class="admin-dashboard-view" id="admin-events-view" data-admin-view-panel="events" hidden>
+      <div class="admin-events-toolbar"><div><span class="eyebrow">PUBLISH &amp; EDIT</span><h3>Events &amp; workshops</h3><p>Create public announcements and manage their links and details.</p></div><button class="btn primary" type="button" id="admin-create-event">Create event</button></div>
       <section class="admin-event-manager booking-panel" aria-labelledby="admin-events-title">
-        <div class="admin-calendar-heading"><div><span class="eyebrow">PUBLIC ANNOUNCEMENTS</span><h3 id="admin-events-title">Events &amp; workshops</h3><p>Add upcoming workshops or facility events. Published items appear in the homepage hero ticker and on the Events &amp; Workshop page.</p></div></div>
         <div class="admin-event-manager-layout">
           <form id="admin-event-form" class="admin-event-form" novalidate>
             <input type="hidden" name="eventId">
@@ -70,16 +88,37 @@
           <div class="admin-event-list-wrap"><div class="admin-event-list-heading"><div><span class="eyebrow">CONTENT MANAGER</span><h4>Published &amp; past events</h4></div><button class="btn outline" id="admin-event-refresh" type="button">↻ Refresh</button></div><div id="admin-event-list" class="admin-event-list"><p class="admin-status">Sign in to load events.</p></div></div>
         </div>
       </section>
-      <section class="admin-calendar-panel booking-panel" aria-labelledby="admin-calendar-title">
-        <div class="admin-calendar-heading"><div><span class="eyebrow">MONTH AT A GLANCE</span><h3 id="admin-calendar-title">Facility calendar</h3><p>Select a weekday to review and manage that day. Brown Bear events are read-only here.</p></div><div class="admin-calendar-controls"><button class="btn outline" id="admin-calendar-previous" type="button" aria-label="Previous month">←</button><label class="visually-hidden" for="admin-calendar-month">Month</label><input id="admin-calendar-month" type="month"><button class="btn outline" id="admin-calendar-next" type="button" aria-label="Next month">→</button><button class="btn outline" id="admin-calendar-refresh" type="button">↻ Sync</button></div></div>
-        <div class="admin-calendar-toolbar"><label for="admin-calendar-instrument">Show instrument</label><select id="admin-calendar-instrument"><option value="">All instruments</option></select><div class="admin-calendar-legend"><span><i class="brown-bear"></i>Brown Bear · managed externally</span><span><i class="portal"></i>Website booking · editable here</span></div></div>
-        <p id="admin-calendar-status" class="admin-status" role="status" aria-live="polite">Loading the synced facility calendar…</p>
-        <div id="admin-calendar-events" class="admin-calendar-workspace" aria-live="polite"></div>
-        <div class="admin-brownbear-access"><span>To edit or delete legacy events, open Brown Bear and sign in with its separate admin password.</span><a id="admin-brownbear-admin" class="admin-detail-button" href="https://www.brownbearsw.com/cal/flow_cytometry?Op=AdminPage" target="_blank" rel="noopener noreferrer">Open Brown Bear admin ↗</a></div>
-      </section>
-      <div class="admin-booking-toolbar"><label class="admin-search">Search bookings<input type="search" id="admin-search" placeholder="Name, PI, email or booking ID"></label><label>Filter by status<select id="admin-status-filter"><option value="all">All bookings</option><option value="pending">Pending review</option><option value="confirmed">Confirmed</option><option value="cancelled">Cancelled</option></select></label><button class="btn outline" type="button" id="admin-refresh">↻ Refresh</button></div>
-      <p id="admin-dashboard-status" class="admin-status" role="status" aria-live="polite"></p>
-      <div id="admin-booking-list" class="admin-booking-list"></div>
+      </div>
+      <div class="admin-dashboard-view" id="admin-statistics-view" data-admin-view-panel="statistics" hidden>
+        <div class="admin-events-toolbar"><div><span class="eyebrow">FACILITY USAGE</span><h3>Statistics &amp; monthly activity</h3><p>Live booking demand summarized by month, with daily facility calendar and website sessions.</p></div></div>
+        <section class="home-month-overview admin-usage-overview" data-home-month-overview aria-labelledby="home-month-title">
+          <div class="page-container">
+            <div class="home-month-heading">
+              <div><div class="eyebrow">LIVE FACILITY SCHEDULE</div><h2 id="home-month-title">Monthly usage overview</h2><p>See daily facility calendar entries and portal bookings across the entire month.</p></div>
+              <div class="home-month-controls" aria-label="Monthly overview controls">
+                <button type="button" data-home-month-step="-1" aria-label="Previous month">←</button>
+                <strong id="home-month-label" aria-live="polite"></strong>
+                <button type="button" data-home-month-step="1" aria-label="Next month">→</button>
+                <button type="button" data-home-month-today>Today</button>
+                <button type="button" data-home-month-refresh aria-label="Refresh monthly schedule">↻ Refresh</button>
+              </div>
+            </div>
+            <div class="home-month-metrics" id="home-month-metrics" aria-label="Month at a glance"></div>
+            <div class="home-month-board">
+              <div class="home-month-weekdays" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+              <div class="home-month-days" id="home-month-days" role="group" aria-label="Choose a day in the monthly overview"></div>
+              <div class="home-month-detail" id="home-month-detail" aria-live="polite">
+                <div><span class="eyebrow">SELECTED DAY</span><h3 id="home-month-selected-date">Loading monthly schedule…</h3></div>
+                <div id="home-month-events" class="home-month-events"></div>
+              </div>
+            </div>
+            <div class="home-month-footer">
+              <div class="home-month-legend"><span><i class="home-month-legend-live"></i>Brown Bear entries</span><span><i class="home-month-legend-portal"></i>Portal bookings</span><span><i data-instrument-color="neutral"></i>IISc holidays</span></div>
+              <p id="home-month-status" role="status" aria-live="polite">Sign in to load facility usage statistics.</p>
+            </div>
+          </div>
+        </section>
+      </div>
     </section>
   </section>
 </main>
@@ -118,6 +157,6 @@
     <button class="admin-confirm-remove" type="button" id="admin-confirm-remove-item">Remove</button>
   </div>
 </dialog>
-<script src="js/site-shell.js"></script><script src="js/admin-portal.js"></script>
+<script src="js/site-shell.js"></script><script src="js/admin-portal.js"></script><script src="js/home-month-chart.js"></script>
 </body>
 </html>

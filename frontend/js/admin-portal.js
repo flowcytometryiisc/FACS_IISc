@@ -7,6 +7,8 @@ if (adminPortal) {
   const loginForm = adminPortal.querySelector("#admin-login-form");
   const loginStatus = adminPortal.querySelector("#admin-login-status");
   const dashboardStatus = adminPortal.querySelector("#admin-dashboard-status");
+  const dashboardViewButtons = [...adminPortal.querySelectorAll("[data-admin-view-button]")];
+  const dashboardViewPanels = [...adminPortal.querySelectorAll("[data-admin-view-panel]")];
   const bookingList = adminPortal.querySelector("#admin-booking-list");
   const searchInput = adminPortal.querySelector("#admin-search");
   const statusFilter = adminPortal.querySelector("#admin-status-filter");
@@ -50,6 +52,28 @@ if (adminPortal) {
   let csrfToken = "";
   let inactivityTimer = 0;
   const inactivityTimeoutMs = 15 * 60 * 1000;
+
+  function selectDashboardView(viewName) {
+    dashboardViewButtons.forEach(button => {
+      const selected = button.dataset.adminViewButton === viewName;
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+    dashboardViewPanels.forEach(panel => {
+      panel.hidden = panel.dataset.adminViewPanel !== viewName;
+    });
+    if (viewName === "statistics") {
+      document.dispatchEvent(new Event("admin:statistics-opened"));
+    }
+  }
+
+  dashboardViewButtons.forEach(button => {
+    button.addEventListener("click", () => selectDashboardView(button.dataset.adminViewButton));
+  });
+  adminPortal.querySelector("#admin-create-event").addEventListener("click", () => {
+    selectDashboardView("events");
+    eventForm.elements.namedItem("title").focus();
+  });
 
   function escapeHTML(value) {
     return String(value ?? "").replace(/[&<>"']/g, character => ({
@@ -181,6 +205,7 @@ if (adminPortal) {
   function showDashboard(authenticated) {
     loginPanel.hidden = authenticated;
     dashboard.hidden = !authenticated;
+    if (!authenticated) selectDashboardView("bookings");
   }
 
   function renderStats() {

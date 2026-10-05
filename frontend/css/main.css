@@ -1401,7 +1401,25 @@ main section[id],main [id]{scroll-margin-top:28px}
 .admin-dashboard-header p{margin:5px 0 0}
 .admin-dashboard-header .admin-logout{border:1px solid #d6e2ec;background:#fff;color:#31516c}
 .admin-dashboard-header .admin-logout:hover{background:#f2f7fb}
-.admin-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin:0 0 16px}
+.admin-dashboard-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 20px}
+.admin-dashboard-card{display:grid;grid-template-columns:38px minmax(0,1fr) 16px;align-items:center;gap:12px;min-width:0;min-height:100px;padding:16px;border:1px solid #dce7f0;border-radius:13px;background:linear-gradient(145deg,#fff,#f8fbfe);color:#23445f;text-align:left;cursor:pointer;transition:border-color .18s,box-shadow .18s,transform .18s}
+.admin-dashboard-card:hover,.admin-dashboard-card:focus-visible{transform:translateY(-2px);border-color:#9fc6e3;box-shadow:0 9px 22px rgba(21,56,86,.09);outline:none}
+.admin-dashboard-card.active{border-color:#6cabe0;background:linear-gradient(145deg,#f0f8ff,#fff);box-shadow:inset 0 0 0 1px rgba(68,147,207,.12),0 7px 19px rgba(21,79,122,.08)}
+.admin-dashboard-card-icon{display:grid;place-items:center;width:38px;height:38px;border-radius:11px;background:#e8f4ff;color:#147ac0;font-size:20px;font-weight:800}
+.admin-dashboard-card-icon.events{background:#f0eaff;color:#7753bd}
+.admin-dashboard-card-icon.statistics{background:#e6f6ef;color:#23815d}
+.admin-dashboard-card-copy{display:grid;gap:5px;min-width:0}
+.admin-dashboard-card-copy strong{color:#173b59;font:800 14px/1.3 Manrope,Inter,sans-serif}
+.admin-dashboard-card-copy small{color:#70859a;font-size:10px;line-height:1.45}
+.admin-dashboard-card-arrow{color:#7e9bb2;font-size:16px}
+.admin-dashboard-view[hidden]{display:none!important}
+.admin-events-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 13px;padding:16px 18px;border:1px solid #dce7f0;border-radius:13px;background:linear-gradient(110deg,#f8fbfe,#fff)}
+.admin-events-toolbar h3{margin:4px 0;color:#153553;font:800 19px Manrope,Inter,sans-serif}
+.admin-events-toolbar p{margin:4px 0 0;color:#70859a;font-size:11px}
+.admin-events-toolbar .btn{flex:none}
+.admin-usage-overview{margin:0;padding:18px 0;border:1px solid #e0eaf2;border-radius:14px}
+.admin-usage-overview>.page-container{width:100%;max-width:none;padding:0 18px}
+.admin-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:11px;margin:0 0 16px}
 .admin-stat-card{display:grid;gap:9px;min-height:90px;padding:14px;border:1px solid #e0eaf2;border-radius:12px;background:#fff;box-shadow:0 5px 16px rgba(21,56,86,.04)}
 .admin-stat-card span{color:#71869b;font-size:10px;font-weight:600}
 .admin-stat-card strong{color:#10375a;font:800 23px Manrope,Inter,sans-serif}
@@ -1555,6 +1573,8 @@ main section[id],main [id]{scroll-margin-top:28px}
   .booking-layout{grid-template-columns:1fr}
   .booking-sidebar{grid-template-columns:1fr 1fr}
   .admin-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .admin-dashboard-cards{grid-template-columns:1fr}
+  .admin-dashboard-card{min-height:78px}
 }
 @media(max-width:520px){
   .booking-steps{justify-content:space-between;gap:5px;font-size:9px}
@@ -1568,6 +1588,7 @@ main section[id],main [id]{scroll-margin-top:28px}
   .admin-booking-toolbar>label{flex:auto}
   .admin-dashboard-header{align-items:flex-start}
   .admin-dashboard-header h2{font-size:21px}
+  .admin-events-toolbar{align-items:flex-start;flex-direction:column}
   .admin-calendar-heading,.admin-brownbear-access{align-items:stretch;flex-direction:column}
   .admin-calendar-controls{flex-wrap:wrap}
   .admin-calendar-workspace{grid-template-columns:1fr}
