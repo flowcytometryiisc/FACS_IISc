@@ -14,8 +14,8 @@ preview; the live schedule requires the backend to be running.
 - Responsive layout inspired by the supplied IISc facility reference
 - Persistent dark navigation rail with a compact mobile menu
 - Simple research-focused homepage with direct links to detailed pages
-- Separate About, People, Instruments, Services, Data Analysis, Resources,
-  Forms, booking portal, staff admin portal, Workshops and Contact pages
+- Separate About, People, Instruments, Data Analysis, Forms & Resources,
+  booking portal, staff admin portal, Workshops and Contact pages
 - Instrument cards with analyzer/sorter filters
 - Mobile navigation with active-page and instrument-filter highlighting
 - Team portraits stored with the People page assets
