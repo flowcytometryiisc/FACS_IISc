@@ -951,8 +951,8 @@ footer{padding:32px 0 22px}
 .upcoming-workshop-note{gap:14px;margin-top:20px;padding:18px;border-radius:12px}
 .upcoming-workshop-note strong{font-size:14px}
 .upcoming-workshop-note p,.upcoming-workshop-note a{font-size:12px}
-.home-hero{min-height:510px}
-.home-hero-content{padding-top:84px;padding-bottom:75px}
+.home-hero{min-height:460px}
+.home-hero-content{padding-top:72px;padding-bottom:65px}
 .home-hero h1{font-size:clamp(54px,6vw,76px);letter-spacing:-2px}
 .home-lead{max-width:550px}
 .home-actions{gap:12px;margin-top:24px}
