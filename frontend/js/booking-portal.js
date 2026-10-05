@@ -24,6 +24,8 @@ if (bookingPortal) {
   }));
   const selectedInstruments = new Set();
   const selectedSlots = new Map();
+  const holidaysByDate = new Map();
+  let holidayCalendarYears = new Set();
   let selectedDate = "";
   let bookedSlots = new Map();
   let unavailableSlots = new Map();
@@ -54,6 +56,12 @@ if (bookingPortal) {
     }).join(" – ");
   }
 
+  function escapeHTML(value) {
+    return String(value ?? "").replace(/[&<>"']/g, character => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    })[character]);
+  }
+
   async function fetchJSON(url, options = {}) {
     const response = await fetch(url, options);
     const payload = await response.json();
@@ -77,8 +85,11 @@ if (bookingPortal) {
   function renderDates() {
     dateList.innerHTML = dates.map(value => {
       const selected = value === selectedDate;
-      return `<button type="button" class="booking-date${selected ? " selected" : ""}" data-booking-date="${value}" aria-pressed="${selected}">
-        <span>${formatDate(value, { weekday: "short" })}</span><strong>${formatDate(value, { day: "numeric" })}</strong><small>${formatDate(value, { month: "short" })}</small>
+      const holiday = holidaysByDate.get(value);
+      const unsupportedYear = !holidayCalendarYears.has(value.slice(0, 4));
+      const dateNote = holiday?.name || (unsupportedYear ? "Holiday list pending" : formatDate(value, { month: "short" }));
+      return `<button type="button" class="booking-date${selected ? " selected" : ""}${holiday || unsupportedYear ? " holiday" : ""}" title="${escapeHTML(dateNote)}" data-booking-date="${value}" aria-pressed="${selected}">
+        <span>${formatDate(value, { weekday: "short" })}</span><strong>${formatDate(value, { day: "numeric" })}</strong><small>${escapeHTML(dateNote)}</small>
       </button>`;
     }).join("");
     dateList.querySelectorAll("[data-booking-date]").forEach(button => {
@@ -91,8 +102,12 @@ if (bookingPortal) {
   }
 
   function renderSlots() {
+    const selectedHoliday = holidaysByDate.get(selectedDate);
+    const selectedYearUnavailable = selectedDate && !holidayCalendarYears.has(selectedDate.slice(0, 4));
     dateHeading.textContent = selectedDate
-      ? formatDate(selectedDate, { weekday: "long", day: "numeric", month: "long" })
+      ? `${formatDate(selectedDate, { weekday: "long", day: "numeric", month: "long" })}${selectedHoliday
+        ? ` · IISc Holiday: ${selectedHoliday.name}`
+        : selectedYearUnavailable ? " · IISc holiday list pending" : ""}`
       : "Select a date";
     const chosen = instruments.filter(instrument => selectedInstruments.has(instrument.name));
     if (!chosen.length) {
@@ -150,13 +165,17 @@ if (bookingPortal) {
                 ? "Continue sorter booking"
               : operatorLimit
                 ? "Operator limit reached"
+                : unavailableReason === "holiday"
+                  ? `IISc Holiday · ${holidaysByDate.get(selectedDate)?.name || "Closed"}`
+                  : unavailableReason === "holiday_calendar_unavailable"
+                    ? "IISc holiday list pending"
                 : unavailableReason === "started"
                   ? "Session started"
                   : unavailableReason === "weekend"
                     ? "Not bookable"
                     : unavailable ? "Unavailable" : "Available";
         const disabled = booked || cleaning || unavailable || availabilityRefreshing;
-        const button = `<button type="button" class="booking-time-slot${selected ? " selected" : ""}${booked ? " booked" : ""}${cleaning ? " cleaning" : ""}${unavailable ? " unavailable" : ""}" data-slot-key="${key}" ${disabled ? "disabled" : ""} aria-pressed="${selected}"><span>${formatTimeSlot(time)}</span><small>${availabilityRefreshing && !booked && !cleaning && !unavailable ? "Checking…" : status}</small></button>`;
+        const button = `<button type="button" class="booking-time-slot${selected ? " selected" : ""}${booked ? " booked" : ""}${cleaning ? " cleaning" : ""}${unavailable ? " unavailable" : ""}" data-slot-key="${key}" ${disabled ? "disabled" : ""} aria-pressed="${selected}"><span>${formatTimeSlot(time)}</span><small>${escapeHTML(availabilityRefreshing && !booked && !cleaning && !unavailable ? "Checking…" : status)}</small></button>`;
         return button;
       }).join("");
       return `<section class="booking-instrument-slots" data-instrument-color="${instrument.color || "gray"}"><h4>${name} · ${instrument.type}</h4><div class="booking-time-grid">${timeOptions}</div></section>`;
@@ -235,6 +254,9 @@ if (bookingPortal) {
       const payload = await fetchJSON(`${apiBase}/booking-availability?start=${start}&end=${end}`, { cache: "no-store" });
       bookedSlots = new Map(payload.booked.map(slot => [slotKey(slot), slot]));
       unavailableSlots = new Map(payload.unavailable.map(slot => [`${slot.date}|${slot.time}`, slot.reason]));
+      holidaysByDate.clear();
+      payload.holidays.forEach(holiday => holidaysByDate.set(holiday.date, holiday));
+      holidayCalendarYears = new Set(payload.holidayCalendarYears);
       let selectionChanged = false;
       for (const key of selectedSlots.keys()) {
         if (bookedSlots.has(key) || unavailableSlots.has(`${selectedSlots.get(key).date}|${selectedSlots.get(key).time}`)) {
@@ -245,6 +267,7 @@ if (bookingPortal) {
       availabilityError = "";
       availabilityLoaded = true;
       availabilityUpdatedAt = Date.now();
+      renderDates();
       if (selectionChanged) {
         renderSelectedSlots();
         availabilityStatus.textContent = "Availability refreshed. A selected session is no longer available and was removed.";

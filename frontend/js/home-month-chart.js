@@ -13,6 +13,7 @@ if (homeMonthOverview) {
   let visibleMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   let selectedDate = localDateKey(weekdayInMonth(new Date(today)));
   let brownBearEvents = [];
+  let holidayEvents = [];
   let portalSlots = [];
   let instruments = [];
   let monthStatus = { brownBear: "loading", portal: "loading" };
@@ -30,13 +31,9 @@ if (homeMonthOverview) {
     return `${visibleMonth.getFullYear()}-${String(visibleMonth.getMonth() + 1).padStart(2, "0")}`;
   }
 
-  function weekdayDayNumbers(year, month) {
+  function monthDayNumbers(year, month) {
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    return Array.from({ length: daysInMonth }, (_unused, index) => index + 1)
-      .filter(day => {
-        const weekday = new Date(year, month, day).getDay();
-        return weekday !== 0 && weekday !== 6;
-      });
+    return Array.from({ length: daysInMonth }, (_unused, index) => index + 1);
   }
 
   function weekdayInMonth(date) {
@@ -67,6 +64,12 @@ if (homeMonthOverview) {
         title: event.title,
         color: event.color || "neutral",
       })),
+      ...holidayEvents.filter(event => event.date === date).map(event => ({
+        source: "IISc Holiday",
+        time: event.time || "All day",
+        title: event.title,
+        color: event.color || "neutral",
+      })),
       ...portalSlots.filter(slot => slot.date === date).map(slot => ({
         source: "Portal booking",
         time: slot.time.replace("-", " – "),
@@ -79,8 +82,8 @@ if (homeMonthOverview) {
   function renderMetrics() {
     const year = visibleMonth.getFullYear();
     const month = visibleMonth.getMonth();
-    const weekdayDays = weekdayDayNumbers(year, month);
-    const dayCounts = weekdayDays.map(day =>
+    const monthDays = monthDayNumbers(year, month);
+    const dayCounts = monthDays.map(day =>
       eventsForDate(`${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`).length
     );
     const total = dayCounts.reduce((sum, count) => sum + count, 0);
@@ -88,7 +91,7 @@ if (homeMonthOverview) {
     const busiest = Math.max(0, ...dayCounts);
     const metrics = [
       ["Schedule entries", monthStatus.brownBear === "loaded" || monthStatus.portal === "loaded" ? total : "—"],
-      ["Days with activity", monthStatus.brownBear === "loaded" || monthStatus.portal === "loaded" ? `${busyDays} / ${weekdayDays.length}` : "—"],
+      ["Days with activity", monthStatus.brownBear === "loaded" || monthStatus.portal === "loaded" ? `${busyDays} / ${monthDays.length}` : "—"],
       ["Busiest day", monthStatus.brownBear === "loaded" || monthStatus.portal === "loaded"
         ? busiest ? `${busiest} entries` : "No entries yet"
         : "—"],
@@ -124,10 +127,10 @@ if (homeMonthOverview) {
   function renderDays() {
     const year = visibleMonth.getFullYear();
     const month = visibleMonth.getMonth();
-    const weekdayDays = weekdayDayNumbers(year, month);
+    const monthDays = monthDayNumbers(year, month);
     const firstDay = new Date(year, month, 1).getDay();
-    const leadingDays = firstDay === 0 || firstDay === 6 ? 0 : firstDay - 1;
-    const counts = weekdayDays.map(day => {
+    const leadingDays = (firstDay + 6) % 7;
+    const counts = monthDays.map(day => {
       const value = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
       return {
         day,
@@ -139,7 +142,11 @@ if (homeMonthOverview) {
             count: brownBearEvents.filter(event => event.date === value && event.instrument === instrument.name).length
               + portalSlots.filter(slot => slot.date === value && slot.instrument === instrument.name).length,
           })),
-          { color: "neutral", count: brownBearEvents.filter(event => event.date === value && !event.instrument).length },
+          {
+            color: "neutral",
+            count: brownBearEvents.filter(event => event.date === value && !event.instrument).length
+              + holidayEvents.filter(event => event.date === value).length,
+          },
         ].filter(item => item.count > 0),
         portal: portalSlots.filter(slot => slot.date === value).length,
       };
@@ -155,7 +162,8 @@ if (homeMonthOverview) {
       const total = item.live + item.portal;
       const selected = selectedDate === item.date;
       const isToday = localDateKey(today) === item.date;
-      const title = `${formatDate(item.date, { weekday: "long", day: "numeric", month: "long" })}: ${item.live} Brown Bear calendar entries, ${item.portal} portal bookings`;
+      const holidayCount = holidayEvents.filter(event => event.date === item.date).length;
+      const title = `${formatDate(item.date, { weekday: "long", day: "numeric", month: "long" })}: ${item.live} Brown Bear calendar entries, ${item.portal} portal bookings, ${holidayCount} IISc holidays`;
       const bars = item.byColor.map(group =>
         `<i data-instrument-color="${escapeHTML(group.color)}" style="height:${Math.max(9, Math.round(group.count / maximum * 46))}px"></i>`
       ).join("");
@@ -163,7 +171,7 @@ if (homeMonthOverview) {
         <span class="home-month-day-number">${day}</span><span class="home-month-bars" aria-hidden="true">${bars}</span><span class="home-month-count">${total ? `${total} ${total === 1 ? "entry" : "entries"}` : "—"}</span>
       </button>`;
     }));
-    const trailingDays = (5 - (cells.length % 5)) % 5;
+    const trailingDays = (7 - (cells.length % 7)) % 7;
     cells.push(...Array.from({ length: trailingDays }, () =>
       '<span class="home-month-day-spacer" aria-hidden="true"></span>'
     ));
@@ -183,6 +191,9 @@ if (homeMonthOverview) {
     const parts = [];
     if (monthStatus.brownBear === "loaded") parts.push(`${brownBearEvents.length} Brown Bear entries`);
     else if (monthStatus.brownBear === "error") parts.push("Brown Bear calendar could not be reached");
+    if (monthStatus.brownBear === "loaded" && holidayEvents.length) {
+      parts.push(`${holidayEvents.length} IISc holidays`);
+    }
     if (monthStatus.portal === "loaded") parts.push(`${portalSlots.length} portal sessions`);
     else if (monthStatus.portal === "error") parts.push("Portal bookings could not be loaded");
     statusLabel.textContent = parts.join(" · ") || "Loading both live schedule sources…";
@@ -205,6 +216,7 @@ if (homeMonthOverview) {
     const start = `${month}-01`;
     const end = localDateKey(new Date(yearValue, monthValue, 0));
     brownBearEvents = [];
+    holidayEvents = [];
     portalSlots = [];
     monthStatus = { brownBear: "loading", portal: "loading" };
     renderDays();
@@ -221,7 +233,10 @@ if (homeMonthOverview) {
     const portalResult = results[1];
     if (calendarResult.status === "fulfilled" && calendarResult.value.month === month
       && Array.isArray(calendarResult.value.events)) {
-      brownBearEvents = calendarResult.value.events.filter(event => event.source !== "portal");
+      brownBearEvents = calendarResult.value.events.filter(event =>
+        event.source !== "portal" && event.source !== "holiday"
+      );
+      holidayEvents = calendarResult.value.events.filter(event => event.source === "holiday");
       monthStatus.brownBear = "loaded";
     } else {
       monthStatus.brownBear = "error";

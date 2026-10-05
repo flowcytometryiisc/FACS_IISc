@@ -599,6 +599,32 @@ def brown_bear_events_between(start_date, end_date):
     return events
 
 
+def iisc_holiday_calendar():
+    return load_json("iisc-holidays.json")
+
+
+def iisc_holidays_between(start_date, end_date):
+    calendar = iisc_holiday_calendar()
+    return [
+        holiday
+        for year in range(start_date.year, end_date.year + 1)
+        for holiday in calendar["years"].get(str(year), [])
+        if start_date.isoformat() <= holiday["date"] <= end_date.isoformat()
+    ]
+
+
+def iisc_holiday_for_date(slot_date):
+    calendar = iisc_holiday_calendar()
+    return next(
+        (
+            holiday
+            for holiday in calendar["years"].get(slot_date[:4], [])
+            if holiday["date"] == slot_date
+        ),
+        None,
+    )
+
+
 def event_time_range(time_text):
     parts = re.split(r"\s*[-\u2012-\u2015\u2212]\s*", time_text.strip(), maxsplit=1)
     if len(parts) != 2:
@@ -751,6 +777,14 @@ def normalize_booking_slots(slots, instrument_records):
             parsed_date = date.fromisoformat(slot_date)
         except (TypeError, ValueError):
             return None, "A selected session has an invalid date."
+        if str(parsed_date.year) not in iisc_holiday_calendar()["years"]:
+            return None, (
+                f"The IISc holiday calendar for {parsed_date.year} is not available "
+                "yet. Please contact the facility before booking that year."
+            )
+        holiday = iisc_holiday_for_date(slot_date)
+        if holiday:
+            return None, f"{holiday['name']} is an IISc holiday; booking is unavailable."
         if (
             instrument not in instrument_records
             or time not in BOOKING_SLOTS_BY_TYPE.get(
@@ -855,6 +889,8 @@ def get_booking_availability():
 
     unavailable_slots = []
     unavailable_by_key = {}
+    holidays = iisc_holidays_between(start_date, end_date)
+    known_holiday_years = set(iisc_holiday_calendar()["years"])
     now = facility_now()
     instrument_records = {item["name"]: item for item in instruments}
     for row in rows:
@@ -899,9 +935,23 @@ def get_booking_availability():
         if len(instrument_names) >= MAX_CONCURRENT_INSTRUMENTS:
             unavailable_by_key[(slot_date, time)] = "operator_limit"
 
+    holiday_by_date = {holiday["date"]: holiday for holiday in holidays}
     current = now.date().isoformat()
     for day_offset in range((end_date - start_date).days + 1):
-        slot_date = (start_date + timedelta(days=day_offset)).isoformat()
+        current_date = start_date + timedelta(days=day_offset)
+        slot_date = current_date.isoformat()
+        if str(current_date.year) not in known_holiday_years:
+            unavailable_by_key.update({
+                (slot_date, time): "holiday_calendar_unavailable"
+                for time in BOOKING_SLOTS
+                if current_date.weekday() in BOOKING_WEEKDAYS
+            })
+        holiday = holiday_by_date.get(slot_date)
+        if holiday:
+            unavailable_by_key.update({
+                (slot_date, time): "holiday"
+                for time in BOOKING_SLOTS
+            })
         if slot_date != current:
             continue
         unavailable_by_key.update({
@@ -911,7 +961,10 @@ def get_booking_availability():
         })
     for day_offset in range((end_date - start_date).days + 1):
         slot_date = start_date + timedelta(days=day_offset)
-        if slot_date.weekday() not in BOOKING_WEEKDAYS:
+        if (
+            slot_date.weekday() not in BOOKING_WEEKDAYS
+            and slot_date.isoformat() not in holiday_by_date
+        ):
             unavailable_by_key.update({
                 (slot_date.isoformat(), time): "weekend"
                 for time in BOOKING_SLOTS
@@ -925,6 +978,8 @@ def get_booking_availability():
         "end": end,
         "booked": booked_slots,
         "unavailable": unavailable_slots,
+        "holidays": holidays,
+        "holidayCalendarYears": sorted(known_holiday_years),
     })
     response.headers["Cache-Control"] = "no-store"
     return response
@@ -987,6 +1042,18 @@ def create_booking():
             parsed_date = date.fromisoformat(slot_date)
         except (TypeError, ValueError):
             return jsonify({"error": "A selected session has an invalid date."}), 400
+        if str(parsed_date.year) not in iisc_holiday_calendar()["years"]:
+            return jsonify({
+                "error": (
+                    f"The IISc holiday calendar for {parsed_date.year} is not available "
+                    "yet. Please contact the facility before booking that year."
+                )
+            }), 400
+        holiday = iisc_holiday_for_date(slot_date)
+        if holiday:
+            return jsonify({
+                "error": f"{holiday['name']} is an IISc holiday; booking is unavailable."
+            }), 400
         if (
             instrument not in instruments
             or time not in BOOKING_SLOTS_BY_TYPE.get(
@@ -1201,7 +1268,7 @@ def get_admin_calendar():
     if not re.fullmatch(r"\d{4}-\d{2}", month):
         return jsonify({"error": "Provide the calendar month as YYYY-MM."}), 400
     try:
-        datetime.strptime(f"{month}-01", "%Y-%m-%d")
+        month_start = datetime.strptime(f"{month}-01", "%Y-%m-%d")
     except ValueError:
         return jsonify({"error": "The requested calendar month is invalid."}), 400
     try:
@@ -1212,6 +1279,21 @@ def get_admin_calendar():
         ]
     except BrownBearCalendarError as error:
         return jsonify({"error": str(error)}), 502
+    events.extend(
+        {
+            "date": holiday["date"],
+            "time": "All day",
+            "title": f"IISc Holiday · {holiday['name']}",
+            "instrument": "",
+            "color": "neutral",
+            "source": "holiday",
+        }
+        for holiday in iisc_holidays_between(
+            month_start.date(),
+            (month_start.replace(day=28) + timedelta(days=4)).replace(day=1).date()
+            - timedelta(days=1),
+        )
+    )
 
     connection = booking_connection()
     try:
@@ -1874,6 +1956,23 @@ def get_calendar():
         ]
     except BrownBearCalendarError as error:
         return jsonify({"error": str(error)}), 502
+    events.extend(
+        {
+            "date": holiday["date"],
+            "time": "All day",
+            "title": f"IISc Holiday · {holiday['name']}",
+            "instrument": "",
+            "color": "neutral",
+            "source": "holiday",
+        }
+        for holiday in iisc_holidays_between(
+            datetime.strptime(f"{month}-01", "%Y-%m-%d").date(),
+            (
+                datetime.strptime(f"{month}-01", "%Y-%m-%d")
+                .replace(day=28) + timedelta(days=4)
+            ).replace(day=1).date() - timedelta(days=1),
+        )
+    )
 
     portal_bookings_available = True
     try:
@@ -1912,11 +2011,12 @@ def get_calendar():
         "timezone": "Asia/Kolkata",
         "fetchedAt": datetime.now(timezone.utc).isoformat(),
         "source": CALENDAR_URL,
+        "holidaySource": iisc_holiday_calendar()["source"],
         "events": events,
         "portalBookingsAvailable": portal_bookings_available,
         "portalBookingsWarning": (
             None if portal_bookings_available
-            else "Website bookings are temporarily unavailable; only Brown Bear events are shown."
+            else "Website bookings are temporarily unavailable; Brown Bear entries and IISc holidays are shown."
         ),
     })
     result.headers["Cache-Control"] = "no-store"

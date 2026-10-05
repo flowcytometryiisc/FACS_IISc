@@ -23,6 +23,8 @@ preview; the live schedule requires the backend to be running.
   IISc seal and campus image in the sidebar
 - Homepage monthly overview chart with day-by-day Brown Bear calendar and portal
   booking counts, daily details, month navigation and live refresh
+- IISc's published regular holiday list in the homepage schedule and booking
+  availability; restricted holidays are excluded
 - Live Brown Bear instrument category colors are mapped to the facility's
   instrument palette in the homepage overview
 - Multi-instrument booking form with live slot availability, booking details,
@@ -53,6 +55,15 @@ Sessions run hourly from 10:00 AM to 1:00 PM and 2:00 PM to 5:00 PM. Consecutive
 sorter sessions can be booked together; the next contiguous session after the
 last booked sorter session is blocked for cleaning. No more than two instruments
 can be booked for the same time slot across Brown Bear and portal bookings.
+IISc holidays are taken from the regular-holidays page of its annual Public
+Relations Office holiday PDF; the separate restricted-holidays page is not used.
+The published 2026 dates are transcribed in
+`frontend/data/iisc-holidays.json` from
+<https://www.iisc.ac.in/wp-content/uploads/2025/09/PRO_Holidays-2026.pdf>.
+IISc's PDF is image-based rather than a machine-readable calendar feed, so the
+dates must be reviewed and updated from the next official IISc PDF each year.
+Bookings are disabled for years that do not yet have a verified holiday list;
+update the JSON when IISc publishes that year's regular-holidays list.
 The staff portal labels Brown Bear events as externally managed and links to
 Brown Bear's separate admin sign-in. Authorized staff can edit or delete those
 legacy events there; website bookings can be rescheduled or deleted in this

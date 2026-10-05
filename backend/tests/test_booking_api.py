@@ -3,7 +3,7 @@ import json
 import os
 import sqlite3
 from contextlib import closing
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 import sys
 import tempfile
@@ -803,7 +803,7 @@ class BookingApiTests(unittest.TestCase):
             {**event, "source": "calendar"},
         )
         self.assertFalse(payload["portalBookingsAvailable"])
-        self.assertIn("only Brown Bear events are shown", payload["portalBookingsWarning"])
+        self.assertIn("Brown Bear entries and IISc holidays are shown", payload["portalBookingsWarning"])
 
     def test_calendar_reports_portal_booking_data_unavailable_on_database_failure(self):
         event = {
@@ -825,9 +825,10 @@ class BookingApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         self.assertEqual(
-            [item["title"] for item in payload["events"]],
+            [item["title"] for item in payload["events"] if item["source"] == "calendar"],
             ["Research A"],
         )
+        self.assertTrue(any(event["source"] == "holiday" for event in payload["events"]))
         self.assertFalse(payload["portalBookingsAvailable"])
 
     def test_booking_rejects_weekend_sessions(self):
@@ -842,6 +843,93 @@ class BookingApiTests(unittest.TestCase):
             }),
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_iisc_holidays_are_shown_and_blocked_but_restricted_dates_are_not(self):
+        holiday_date = "2026-12-25"
+        with patch.object(
+            facility_app, "facility_today", return_value=date(2026, 10, 1)
+        ):
+            availability = self.client.get(
+                f"/api/booking-availability?start={holiday_date}&end={holiday_date}"
+            )
+            self.assertEqual(availability.status_code, 200)
+            payload = availability.get_json()
+            self.assertEqual(
+                payload["holidays"],
+                [{"date": holiday_date, "name": "Christmas Day"}],
+            )
+            self.assertEqual(
+                {slot["reason"] for slot in payload["unavailable"]},
+                {"holiday"},
+            )
+            self.assertIn("2026", payload["holidayCalendarYears"])
+            calendar = self.client.get("/api/calendar?month=2026-12").get_json()
+            self.assertEqual(
+                calendar["holidaySource"],
+                facility_app.iisc_holiday_calendar()["source"],
+            )
+            christmas = [
+                event for event in calendar["events"]
+                if event["source"] == "holiday" and event["date"] == holiday_date
+            ]
+            self.assertEqual(
+                christmas[0]["title"],
+                "IISc Holiday · Christmas Day",
+            )
+            self.assertEqual(christmas[0]["time"], "All day")
+            restricted_date = self.client.get(
+                "/api/booking-availability?start=2026-01-01&end=2026-01-01"
+            ).get_json()
+            self.assertEqual(restricted_date["holidays"], [])
+            self.assertNotIn(
+                "holiday",
+                {slot["reason"] for slot in restricted_date["unavailable"]},
+            )
+
+            response = self.client.post(
+                "/api/bookings",
+                data=self.booking_data({**self.slot, "date": holiday_date}),
+            )
+            self.assertEqual(response.status_code, 400)
+            self.assertIn("Christmas Day", response.get_json()["error"])
+
+            self.sign_in()
+            admin_response = self.client.post(
+                "/api/admin/bookings",
+                json={
+                    "userName": "Staff Added",
+                    "piName": "Dr. Example",
+                    "phone": "+91 98765 43210",
+                    "email": "staff-added@example.edu",
+                    "department": "Biological Sciences",
+                    "specimen": "Cell suspension",
+                    "notes": "Created by staff",
+                    "slots": [{**self.slot, "date": holiday_date}],
+                },
+                headers=self.admin_headers(),
+            )
+            self.assertEqual(admin_response.status_code, 400)
+            self.assertIn("Christmas Day", admin_response.get_json()["error"])
+
+    def test_unknown_iisc_holiday_year_is_not_bookable(self):
+        future_date = "2027-01-01"
+        with patch.object(
+            facility_app, "facility_today", return_value=date(2026, 10, 5)
+        ):
+            availability = self.client.get(
+                f"/api/booking-availability?start={future_date}&end={future_date}"
+            )
+            self.assertEqual(availability.status_code, 200)
+            self.assertEqual(
+                {slot["reason"] for slot in availability.get_json()["unavailable"]},
+                {"holiday_calendar_unavailable"},
+            )
+            response = self.client.post(
+                "/api/bookings",
+                data=self.booking_data({**self.slot, "date": future_date}),
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("2027", response.get_json()["error"])
 
     def test_admin_login_rejects_incorrect_password(self):
         response = self.client.post("/api/admin/login", json={"password": "wrong"})
@@ -945,7 +1033,10 @@ class BookingApiTests(unittest.TestCase):
             fetch_calendar.call_args.args[0].get_header("Cache-control"),
             "no-cache",
         )
-        events = result.get_json()["events"]
+        events = [
+            event for event in result.get_json()["events"]
+            if event["source"] == "calendar"
+        ]
         self.assertEqual(
             [(event["instrument"], event["color"]) for event in events],
             [

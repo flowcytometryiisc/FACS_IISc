@@ -1304,8 +1304,10 @@ main section[id],main [id]{scroll-margin-top:28px}
 .booking-date{display:grid;flex:1 0 61px;justify-items:center;gap:2px;min-height:65px;padding:7px 5px;border:1px solid #e0e9f0;border-radius:9px;background:#fff;color:#647c92;cursor:pointer}
 .booking-date span,.booking-date small{font-size:9px;font-weight:600}
 .booking-date strong{color:#214563;font-size:18px;line-height:1.1}
+.booking-date.holiday small{max-width:58px;overflow:hidden;color:#a54724;text-overflow:ellipsis;white-space:nowrap}
 .booking-date.selected{border-color:#1882da;background:#0879d9;box-shadow:0 5px 14px rgba(19,117,206,.17);color:#eaf6ff}
 .booking-date.selected strong{color:#fff}
+.booking-date.holiday.selected small{color:#fff}
 .booking-slot-area{margin-top:12px;padding-top:16px;border-top:1px solid #e8eef4}
 .booking-slot-heading{display:flex;align-items:end;justify-content:space-between;gap:10px;margin-bottom:12px}
 .booking-slot-heading h3{margin:4px 0 0;color:#183958;font:700 15px/1.3 Manrope,Inter,sans-serif}
@@ -1590,9 +1592,9 @@ main section[id],main [id]{scroll-margin-top:28px}
 .home-month-metric span{color:#72869a;font-size:10px;font-weight:600}
 .home-month-metric strong{color:#143e62;font:800 15px Manrope,Inter,sans-serif;text-align:right}
 .home-month-board{display:grid;grid-template-columns:minmax(0,1fr) 265px;grid-template-rows:auto minmax(345px,1fr);overflow:hidden;border:1px solid #dce6ef;border-radius:13px;background:#fff;box-shadow:0 8px 24px rgba(20,55,88,.05)}
-.home-month-weekdays{grid-column:1;grid-row:1;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));padding:0 10px;border-bottom:1px solid #e9eef3;background:#f9fbfd;color:#778ba0;font-size:10px;font-weight:800;text-align:center}
+.home-month-weekdays{grid-column:1;grid-row:1;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));padding:0 10px;border-bottom:1px solid #e9eef3;background:#f9fbfd;color:#778ba0;font-size:10px;font-weight:800;text-align:center}
 .home-month-weekdays span{padding:12px 2px}
-.home-month-days{grid-column:1;grid-row:2;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));grid-template-rows:repeat(6,minmax(57px,1fr));padding:6px 10px 9px}
+.home-month-days{grid-column:1;grid-row:2;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:repeat(6,minmax(57px,1fr));padding:6px 10px 9px}
 .home-month-day-spacer{min-width:0;min-height:55px;margin:3px}
 .home-month-day{display:flex;position:relative;min-width:0;min-height:0;flex-direction:column;align-items:center;justify-content:space-between;gap:2px;margin:3px;padding:5px 2px 4px;border:1px solid transparent;border-radius:8px;background:#fff;color:#2e4d67;cursor:pointer;transition:border-color .16s,background .16s}
 .home-month-day:hover{border-color:#c2daed;background:#f4f9fd}
