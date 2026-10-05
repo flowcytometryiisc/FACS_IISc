@@ -19,12 +19,13 @@ if (adminPortal) {
   const brownBearAdminLink = adminPortal.querySelector("#admin-brownbear-admin");
   const editDialog = document.querySelector("#admin-edit-booking");
   const editForm = document.querySelector("#admin-edit-form");
-  const editSlots = document.querySelector("#admin-edit-slots");
+  const editSlots = document.querySelector("#admin-edit-slots-list");
   const editStatus = document.querySelector("#admin-edit-status");
   const bookingTimes = ["10:00-11:00", "11:00-12:00", "12:00-13:00", "14:00-15:00", "15:00-16:00", "16:00-17:00"];
   let bookings = [];
   let instruments = [];
   let editingBookingId = "";
+  let creatingBooking = false;
   let currentCalendarEvents = [];
   let calendarFetchedAt = "";
   let selectedCalendarDate = "";
@@ -69,10 +70,11 @@ if (adminPortal) {
   function renderStats() {
     const currentDate = new Date();
     const today = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(currentDate.getDate()).padStart(2, "0")}`;
-    const active = bookings.filter(booking => booking.status === "confirmed");
+    const active = bookings.filter(booking => booking.status !== "cancelled");
     const upcoming = active.reduce((count, booking) => count + booking.slots.filter(slot => slot.date >= today).length, 0);
     const metrics = [
-      ["Confirmed bookings", active.length],
+      ["Confirmed bookings", bookings.filter(booking => booking.status === "confirmed").length],
+      ["Pending review", bookings.filter(booking => booking.status === "pending").length],
       ["Upcoming sessions", upcoming],
       ["Cancelled bookings", bookings.filter(booking => booking.status === "cancelled").length],
       ["Total bookings", bookings.length],
@@ -89,6 +91,7 @@ if (adminPortal) {
       const searchable = `${booking.id} ${booking.userName} ${booking.piName} ${booking.email} ${booking.department}`.toLowerCase();
       return (!query || searchable.includes(query)) && (filter === "all" || booking.status === filter);
     });
+
     if (!visible.length) {
       bookingList.innerHTML = `<div class="admin-empty">${bookings.length ? "No bookings match these filters." : "No bookings have been submitted yet."}</div>`;
       return;
@@ -101,12 +104,15 @@ if (adminPortal) {
         <div class="admin-booking-card-top"><div><span class="admin-booking-id">${escapeHTML(booking.id)}</span><h3>${escapeHTML(booking.userName)}</h3><span class="admin-booking-subtitle">PI: ${escapeHTML(booking.piName)} · ${escapeHTML(booking.department || "Department not provided")}</span></div><span class="admin-status-badge ${escapeHTML(booking.status)}">${escapeHTML(booking.status)}</span></div>
         <div class="admin-booking-card-meta"><a href="mailto:${escapeHTML(booking.email)}">${escapeHTML(booking.email)}</a><a href="tel:${escapeHTML(booking.phone)}">${escapeHTML(booking.phone)}</a><span>${escapeHTML(booking.specimen)}</span><span>${booking.slots.length} session${booking.slots.length === 1 ? "" : "s"}</span></div>
         <div class="admin-session-list">${sessions}</div>
-        <div class="admin-booking-actions"><button class="admin-detail-button" type="button" data-booking-detail="${escapeHTML(booking.id)}">View details</button><a class="admin-detail-button" href="${apiBase}/admin/bookings/${encodeURIComponent(booking.id)}/form" target="_blank" rel="noreferrer">Download user form</a>${booking.status === "confirmed"
-          ? `<button class="admin-detail-button" type="button" data-booking-edit="${escapeHTML(booking.id)}">Change sessions</button>`
+        <div class="admin-booking-actions"><button class="admin-detail-button" type="button" data-booking-detail="${escapeHTML(booking.id)}">View details</button>${booking.hasForm
+          ? `<a class="admin-detail-button" href="${apiBase}/admin/bookings/${encodeURIComponent(booking.id)}/form" target="_blank" rel="noreferrer">Download user form</a>`
           : ""}
-          ${booking.status === "confirmed"
-          ? `<button class="admin-cancel-button" type="button" data-booking-status="cancelled" data-booking-id="${escapeHTML(booking.id)}">Cancel booking</button>`
-          : `<button class="admin-restore-button" type="button" data-booking-status="confirmed" data-booking-id="${escapeHTML(booking.id)}">Restore booking</button>`}
+          <button class="admin-detail-button" type="button" data-booking-edit="${escapeHTML(booking.id)}">Edit booking</button>
+          ${booking.status === "pending"
+          ? `<button class="admin-restore-button" type="button" data-booking-status="confirmed" data-booking-id="${escapeHTML(booking.id)}">Accept request</button><button class="admin-cancel-button" type="button" data-booking-status="cancelled" data-booking-id="${escapeHTML(booking.id)}">Decline request</button>`
+          : booking.status === "confirmed"
+            ? `<button class="admin-cancel-button" type="button" data-booking-status="cancelled" data-booking-id="${escapeHTML(booking.id)}">Cancel booking</button>`
+            : `<button class="admin-restore-button" type="button" data-booking-status="confirmed" data-booking-id="${escapeHTML(booking.id)}">Restore booking</button>`}
           <button class="admin-delete-button" type="button" data-booking-delete="${escapeHTML(booking.id)}">Delete permanently</button></div>
       </article>`;
     }).join("");
@@ -335,7 +341,7 @@ if (adminPortal) {
 
   async function deleteBooking(bookingId, deleteButton) {
     const booking = bookings.find(item => item.id === bookingId);
-    if (!booking || !window.confirm(`Permanently delete booking ${booking.id} and its uploaded user form? This cannot be undone.`)) return;
+    if (!booking || !window.confirm(`Permanently delete booking ${booking.id}${booking.hasForm ? " and its uploaded user form" : ""}? This cannot be undone.`)) return;
     deleteButton.disabled = true;
     try {
       const payload = await fetchJSON(`${apiBase}/admin/bookings/${encodeURIComponent(booking.id)}`, {
@@ -354,39 +360,74 @@ if (adminPortal) {
     }
   }
 
-  function openEditDialog(booking) {
-    editingBookingId = booking.id;
-    document.querySelector("#admin-edit-title").textContent = `Change sessions · ${booking.id}`;
-    editStatus.textContent = "";
+  function appendEditSlot(slot = {}) {
+    if (editSlots.querySelectorAll("[data-edit-slot]").length >= 12) {
+      editStatus.textContent = "A booking can contain up to 12 sessions.";
+      return;
+    }
+    const index = editSlots.querySelectorAll("[data-edit-slot]").length + 1;
     const instrumentOptions = instruments.map(instrument =>
       `<option value="${escapeHTML(instrument.name)}">${escapeHTML(instrument.name)}</option>`
     ).join("");
-    editSlots.innerHTML = booking.slots.map((slot, index) => `
+    const minDate = nextBusinessDate();
+    editSlots.insertAdjacentHTML("beforeend", `
       <fieldset class="admin-edit-slot" data-edit-slot>
-        <legend>Session ${index + 1}</legend>
+        <legend>Session ${index}</legend>
         <label>Instrument<select name="instrument" required>${instrumentOptions}</select></label>
-        <label>Date<input name="date" type="date" min="${facilityDateOffset()}" max="${facilityDateOffset(90)}" required value="${escapeHTML(slot.date)}"></label>
+        <label>Date<input name="date" type="date" min="${minDate}" max="${facilityDateOffset(90)}" required value="${escapeHTML(slot.date || minDate)}"></label>
         <label>Time<select name="time" required>${bookingTimes.map(time =>
           `<option value="${time}">${formatTimeSlot(time)}</option>`
         ).join("")}</select></label>
-      </fieldset>`).join("");
-    [...editSlots.querySelectorAll("[data-edit-slot]")].forEach((row, index) => {
-      row.querySelector('[name="instrument"]').value = booking.slots[index].instrument;
-      row.querySelector('[name="time"]').value = booking.slots[index].time;
-      const dateInput = row.querySelector('[name="date"]');
-      dateInput.addEventListener("change", () => {
-        const weekday = new Date(`${dateInput.value}T12:00:00`).getDay();
-        dateInput.setCustomValidity(weekday === 0 || weekday === 6
-          ? "Choose a weekday; weekend sessions are not available."
-          : "");
-      });
+        <button class="admin-delete-button" type="button" data-remove-session>Remove session</button>
+      </fieldset>`);
+    const row = editSlots.lastElementChild;
+    if (slot.instrument) row.querySelector('[name="instrument"]').value = slot.instrument;
+    if (slot.time) row.querySelector('[name="time"]').value = slot.time;
+    const dateInput = row.querySelector('[name="date"]');
+    dateInput.addEventListener("change", () => {
+      const weekday = new Date(`${dateInput.value}T12:00:00`).getDay();
+      dateInput.setCustomValidity(weekday === 0 || weekday === 6
+        ? "Choose a weekday; weekend sessions are not available."
+        : "");
     });
+    editStatus.textContent = "";
+  }
+
+  function nextBusinessDate() {
+    let offset = 1;
+    let date = new Date(`${facilityDateOffset(offset)}T00:00:00Z`);
+    while (date.getUTCDay() === 0 || date.getUTCDay() === 6) {
+      offset += 1;
+      date = new Date(`${facilityDateOffset(offset)}T00:00:00Z`);
+    }
+    return date.toISOString().slice(0, 10);
+  }
+
+  function openEditDialog(booking = null) {
+    editingBookingId = booking?.id || "";
+    creatingBooking = !booking;
+    document.querySelector("#admin-edit-title").textContent =
+      booking ? `Edit booking · ${booking.id}` : "Add a booking";
+    editForm.querySelector('[type="submit"]').textContent =
+      booking ? "Save booking" : "Create confirmed booking";
+    editStatus.textContent = "";
+    for (const [name, value] of Object.entries({
+      userName: booking?.userName || "",
+      piName: booking?.piName || "",
+      email: booking?.email || "",
+      phone: booking?.phone || "",
+      department: booking?.department || "",
+      specimen: booking?.specimen || "",
+      notes: booking?.notes || "",
+    })) editForm.elements[name].value = value;
+    editSlots.replaceChildren();
+    (booking?.slots || [{}]).forEach(appendEditSlot);
     editDialog.showModal();
   }
 
   editForm.addEventListener("submit", async event => {
     event.preventDefault();
-    if (!editingBookingId || !editForm.reportValidity()) return;
+    if (!editForm.reportValidity()) return;
     const slots = [...editSlots.querySelectorAll("[data-edit-slot]")].map(row => ({
       instrument: row.querySelector('[name="instrument"]').value,
       date: row.querySelector('[name="date"]').value,
@@ -396,23 +437,50 @@ if (adminPortal) {
     submitButton.disabled = true;
     editStatus.textContent = "Checking live conflicts and saving…";
     try {
-      const payload = await fetchJSON(`${apiBase}/admin/bookings/${encodeURIComponent(editingBookingId)}/slots`, {
-        method: "PUT",
+      const details = Object.fromEntries(
+        ["userName", "piName", "email", "phone", "department", "specimen", "notes"]
+          .map(name => [name, editForm.elements[name].value.trim()])
+      );
+      const payload = await fetchJSON(
+        creatingBooking
+          ? `${apiBase}/admin/bookings`
+          : `${apiBase}/admin/bookings/${encodeURIComponent(editingBookingId)}`,
+        {
+        method: creatingBooking ? "POST" : "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slots }),
+        body: JSON.stringify({ ...details, slots }),
       });
-      bookings = bookings.map(booking => booking.id === editingBookingId ? payload.booking : booking);
+      if (creatingBooking) bookings.unshift(payload.booking);
+      else bookings = bookings.map(booking => booking.id === editingBookingId ? payload.booking : booking);
+      const savedId = payload.booking.id;
       editDialog.close();
       renderStats();
       renderBookings();
       await loadFacilityCalendar();
-      dashboardStatus.textContent = `Booking ${editingBookingId} sessions updated.`;
+      dashboardStatus.textContent = creatingBooking
+        ? `Booking ${savedId} created.${payload.notification?.sent ? " Confirmation email sent." : ` Email not sent: ${payload.notification?.error || "delivery status unavailable"}`}`
+        : `Booking ${savedId} updated.`;
     } catch (error) {
       editStatus.textContent = error.message;
     } finally {
       submitButton.disabled = false;
     }
   });
+
+  document.querySelector("#admin-add-session").addEventListener("click", () => appendEditSlot());
+  editSlots.addEventListener("click", event => {
+    const removeButton = event.target.closest("[data-remove-session]");
+    if (!removeButton) return;
+    if (editSlots.querySelectorAll("[data-edit-slot]").length <= 1) {
+      editStatus.textContent = "Keep at least one session in the booking.";
+      return;
+    }
+    removeButton.closest("[data-edit-slot]").remove();
+    [...editSlots.querySelectorAll("[data-edit-slot] legend")].forEach((legend, index) => {
+      legend.textContent = `Session ${index + 1}`;
+    });
+  });
+  adminPortal.querySelector("#admin-create-booking").addEventListener("click", () => openEditDialog());
 
   document.querySelectorAll("[data-close-admin-edit]").forEach(button =>
     button.addEventListener("click", () => editDialog.close())
@@ -466,7 +534,9 @@ if (adminPortal) {
           <div><dt>Submitted</dt><dd>${escapeHTML(new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(booking.createdAt)))}</dd></div>
           <div class="wide"><dt>Experiment notes</dt><dd>${escapeHTML(booking.notes || "No notes provided")}</dd></div>
           <div class="wide"><dt>Selected sessions</dt><dd class="admin-detail-sessions">${booking.slots.map(slot => `<span data-instrument-color="${escapeHTML(slot.color || "gray")}">${escapeHTML(slot.instrument)} · ${escapeHTML(formatDate(slot.date))} · ${escapeHTML(slot.time.replace("-", " – "))}</span>`).join("")}</dd></div>
-        </dl><a class="btn primary admin-detail-download" href="${apiBase}/admin/bookings/${encodeURIComponent(booking.id)}/form" target="_blank" rel="noreferrer">Download ${escapeHTML(booking.formName)}</a>`;
+        </dl>${booking.hasForm
+          ? `<a class="btn primary admin-detail-download" href="${apiBase}/admin/bookings/${encodeURIComponent(booking.id)}/form" target="_blank" rel="noreferrer">Download ${escapeHTML(booking.formName)}</a>`
+          : `<p class="admin-status">No user form was uploaded for this staff-created booking.</p>`}`;
       detailDialog.showModal();
       return;
     }
@@ -484,7 +554,11 @@ if (adminPortal) {
       renderStats();
       renderBookings();
       await loadFacilityCalendar();
-      dashboardStatus.textContent = `Booking ${bookingId} updated.`;
+      dashboardStatus.textContent = payload.notification
+        ? payload.notification.sent
+          ? `Booking ${bookingId} accepted. Confirmation email sent.`
+          : `Booking ${bookingId} accepted, but the confirmation email was not sent: ${payload.notification.error}`
+        : `Booking ${bookingId} updated.`;
     } catch (error) {
       dashboardStatus.textContent = error.message;
       statusButton.disabled = false;

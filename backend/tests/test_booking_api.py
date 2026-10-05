@@ -88,7 +88,8 @@ class BookingApiTests(unittest.TestCase):
         created = self.client.post("/api/bookings", data=self.booking_data())
         self.assertEqual(created.status_code, 201)
         booking = created.get_json()
-        self.assertEqual(booking["status"], "confirmed")
+        self.assertEqual(booking["status"], "pending")
+        self.assertFalse(booking["notifications"]["user"]["sent"])
 
         availability = self.client.get(
             f"/api/booking-availability?start={self.slot['date']}&end={self.slot['date']}"
@@ -100,6 +101,8 @@ class BookingApiTests(unittest.TestCase):
         )
         self.assertEqual(booked_slot["color"], "purple")
         self.assertEqual(booked_slot["source"], "portal")
+        self.assertEqual(booked_slot["status"], "pending")
+        self.assertEqual(booked_slot["title"], "Portal booking · Under review")
         calendar = self.client.get(
             f"/api/calendar?month={self.slot['date'][:7]}"
         ).get_json()
@@ -107,7 +110,7 @@ class BookingApiTests(unittest.TestCase):
             event for event in calendar["events"] if event["source"] == "portal"
         ]
         self.assertEqual(len(portal_events), 1)
-        self.assertEqual(portal_events[0]["title"], "Portal booking")
+        self.assertEqual(portal_events[0]["title"], "Portal booking · Under review")
         self.assertNotIn("Alex Researcher", json.dumps(portal_events))
         conflict = self.client.post("/api/bookings", data=self.booking_data())
         self.assertEqual(conflict.status_code, 409)
@@ -117,12 +120,24 @@ class BookingApiTests(unittest.TestCase):
         listing = self.client.get("/api/admin/bookings")
         self.assertEqual(listing.status_code, 200)
         self.assertEqual(listing.get_json()["bookings"][0]["userName"], "Alex Researcher")
+        self.assertEqual(listing.get_json()["bookings"][0]["status"], "pending")
         self.assertEqual(listing.get_json()["bookings"][0]["slots"][0]["color"], "purple")
 
         download = self.client.get(f"/api/admin/bookings/{booking['id']}/form")
         self.assertEqual(download.status_code, 200)
         self.assertEqual(download.data, b"%PDF-1.4\nTest form")
         download.close()
+
+        with patch.object(
+            facility_app, "send_booking_email", return_value={"sent": True, "error": None}
+        ) as send_email:
+            accepted = self.client.patch(
+                f"/api/admin/bookings/{booking['id']}", json={"status": "confirmed"}
+            )
+        self.assertEqual(accepted.status_code, 200)
+        self.assertEqual(accepted.get_json()["booking"]["status"], "confirmed")
+        self.assertTrue(accepted.get_json()["notification"]["sent"])
+        send_email.assert_called_once()
 
         cancelled = self.client.patch(
             f"/api/admin/bookings/{booking['id']}", json={"status": "cancelled"}
@@ -148,9 +163,12 @@ class BookingApiTests(unittest.TestCase):
             f"/api/admin/bookings/{replacement.get_json()['id']}",
             json={"status": "cancelled"},
         )
-        restored = self.client.patch(
-            f"/api/admin/bookings/{booking['id']}", json={"status": "confirmed"}
-        )
+        with patch.object(
+            facility_app, "send_booking_email", return_value={"sent": False, "error": "SMTP unavailable"}
+        ):
+            restored = self.client.patch(
+                f"/api/admin/bookings/{booking['id']}", json={"status": "confirmed"}
+            )
         self.assertEqual(restored.get_json()["booking"]["status"], "confirmed")
 
     def test_booking_rejects_invalid_user_form_and_invalid_slot(self):
@@ -435,6 +453,46 @@ class BookingApiTests(unittest.TestCase):
         ).get_json()
         self.assertTrue(any(slot.get("source") == "portal" for slot in replacement_availability["booked"]))
 
+    def test_admin_can_create_and_edit_all_booking_details(self):
+        self.sign_in()
+        values = {
+            "userName": "Staff Added",
+            "piName": "Dr. Example",
+            "phone": "+91 98765 43210",
+            "email": "staff-added@example.edu",
+            "department": "Biological Sciences",
+            "specimen": "Cell suspension",
+            "notes": "Created by staff",
+            "slots": [self.slot],
+        }
+        with patch.object(
+            facility_app, "send_booking_email", return_value={"sent": True, "error": None}
+        ):
+            created = self.client.post("/api/admin/bookings", json=values)
+        self.assertEqual(created.status_code, 201)
+        booking = created.get_json()["booking"]
+        self.assertEqual(booking["status"], "confirmed")
+        self.assertFalse(booking["hasForm"])
+        self.assertTrue(created.get_json()["notification"]["sent"])
+
+        new_date = facility_app.facility_today() + timedelta(days=3)
+        while new_date.weekday() >= 5:
+            new_date += timedelta(days=1)
+        values.update({
+            "userName": "Updated Staff Booking",
+            "email": "updated@example.edu",
+            "notes": "Updated notes",
+            "slots": [{**self.slot, "date": new_date.isoformat()}],
+        })
+        updated = self.client.put(
+            f"/api/admin/bookings/{booking['id']}", json=values
+        )
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.get_json()["booking"]["userName"], "Updated Staff Booking")
+        self.assertEqual(updated.get_json()["booking"]["email"], "updated@example.edu")
+        self.assertEqual(updated.get_json()["booking"]["notes"], "Updated notes")
+        self.assertEqual(updated.get_json()["booking"]["slots"][0]["date"], new_date.isoformat())
+
     def test_admin_reschedule_rejects_brown_bear_conflict(self):
         created = self.client.post("/api/bookings", data=self.booking_data())
         booking_id = created.get_json()["id"]
@@ -668,6 +726,22 @@ class BookingApiTests(unittest.TestCase):
         self.assertIn("VALUES (%s, %s, %s", statement)
         self.assertIsInstance(parameters[9], JsonbValue)
         self.assertEqual(parameters[9].value, [self.slot])
+
+        connection.execute(
+            """UPDATE bookings SET user_name = ?, pi_name = ?, phone = ?, email = ?,
+                department = ?, specimen = ?, notes = ?, slots = ? WHERE id = ?""",
+            ["Alex", "PI", "phone", "email", "dept", "specimen", "notes",
+             json.dumps([self.slot]), "FC-260930-ABC123"],
+        )
+        statement, parameters = raw_connection.calls[-1]
+        self.assertIn("slots = %s", statement)
+        self.assertIsInstance(parameters[7], JsonbValue)
+
+        connection.execute("BEGIN IMMEDIATE")
+        self.assertTrue(any(
+            "pg_advisory_xact_lock" in statement
+            for statement, _ in raw_connection.calls
+        ))
 
     def test_production_requires_database_url_instead_of_falling_back_to_sqlite(self):
         with patch.dict(os.environ, {"APP_ENV": "production"}, clear=True):

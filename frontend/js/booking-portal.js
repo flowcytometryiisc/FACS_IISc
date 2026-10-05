@@ -141,7 +141,9 @@ if (bookingPortal) {
         const status = cleaning
           ? "Blocked for cleaning"
           : booked
-            ? existingBooking.source === "calendar" ? "Booked · Facility calendar" : "Booked · Portal"
+            ? existingBooking.source === "calendar"
+              ? "Booked · Facility calendar"
+              : existingBooking.status === "pending" ? "Booked · Under review" : "Booked · Portal"
             : selected
               ? "Selected"
               : selectableCleaning
@@ -208,7 +210,7 @@ if (bookingPortal) {
       const instrument = instruments.find(item => item.name === slot.instrument);
       return `<div class="booking-selected-item" data-instrument-color="${instrument?.color || "gray"}"><span><strong>${name}</strong><small>${formatDate(slot.date, { weekday: "short", day: "numeric", month: "short" })} · ${formatTimeSlot(slot.time)}</small></span><button type="button" data-remove-slot="${slotKey(slot)}" aria-label="Remove ${name} session">×</button></div>`;
     }).join("");
-    selectionSummary.textContent = `${slots.length} session${slots.length === 1 ? "" : "s"} selected · Each session will be reserved immediately.`;
+    selectionSummary.textContent = `${slots.length} session${slots.length === 1 ? "" : "s"} selected · Slots will be held while staff review your request.`;
     selectedList.querySelectorAll("[data-remove-slot]").forEach(button => {
       button.addEventListener("click", () => {
         selectedSlots.delete(button.dataset.removeSlot);
@@ -304,7 +306,7 @@ if (bookingPortal) {
     const submitButton = form.querySelector('[type="submit"]');
     submitButton.disabled = true;
     submitButton.setAttribute("aria-busy", "true");
-    submitStatus.textContent = "Confirming your selected sessions…";
+    submitStatus.textContent = "Submitting your request for staff review…";
     try {
       await loadAvailability();
       if (selectedBeforeRefresh.some(key => !selectedSlots.has(key))) {
@@ -316,7 +318,11 @@ if (bookingPortal) {
       const booking = await fetchJSON(`${apiBase}/bookings`, { method: "POST", body: payload });
       document.querySelector("#booking-confirmation-id").textContent = booking.id;
       document.querySelector("#booking-confirmation-slots").textContent =
-        `${booking.slots.length} session${booking.slots.length === 1 ? "" : "s"} reserved`;
+        `${booking.slots.length} session${booking.slots.length === 1 ? "" : "s"} held while staff review your request`;
+      document.querySelector("#booking-confirmation-email").textContent =
+        booking.notifications?.user?.sent
+          ? "We sent an email acknowledging your request."
+          : `Your request is saved, but the acknowledgement email was not sent: ${booking.notifications?.user?.error || "delivery status unavailable"}`;
       confirmation.showModal();
       selectedSlots.clear();
       form.reset();

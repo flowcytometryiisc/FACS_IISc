@@ -1471,6 +1471,13 @@ main section[id],main [id]{scroll-margin-top:28px}
 .admin-edit-slot legend{padding:0 5px;color:#31516c;font-size:10px;font-weight:700}
 .admin-edit-slot label{display:grid;gap:5px;color:#647b90;font-size:10px;font-weight:700}
 .admin-edit-slot input,.admin-edit-slot select{width:100%;min-height:36px;padding:7px;border:1px solid #d5e1eb;border-radius:7px;background:#fff;color:#25445f;font:500 11px Inter,Arial,sans-serif}
+.admin-edit-fields{grid-template-columns:repeat(2,minmax(0,1fr));margin:14px 0}
+.admin-edit-fields label{display:grid;gap:5px;color:#647b90;font-size:10px;font-weight:700}
+.admin-edit-fields input,.admin-edit-fields select,.admin-edit-fields textarea{width:100%;min-height:36px;padding:8px;border:1px solid #d5e1eb;border-radius:7px;background:#fff;color:#25445f;font:500 11px Inter,Arial,sans-serif}
+.admin-edit-fields .wide{grid-column:1/-1}
+.admin-edit-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0}
+.admin-edit-heading h3{margin:0;color:#153553;font:700 16px Manrope,Inter,sans-serif}
+.admin-edit-slot [data-remove-session]{grid-column:1/-1;justify-self:start}
 .admin-edit-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:15px}
 .admin-edit-actions .btn{min-height:36px;padding:8px 12px;font-size:10px}
 .admin-booking-toolbar{display:flex;align-items:end;gap:10px;padding:13px;border:1px solid #e0eaf2;border-radius:12px;background:#f8fbfe}
@@ -1487,6 +1494,7 @@ main section[id],main [id]{scroll-margin-top:28px}
 .admin-status-badge{align-self:flex-start;padding:5px 9px;border-radius:20px;font-size:9px;font-weight:800;text-transform:capitalize}
 .admin-status-badge.confirmed{background:#e6f7ed;color:#227044}
 .admin-status-badge.cancelled{background:#fff0f0;color:#a04646}
+.admin-status-badge.pending{background:#fff5df;color:#8a6418}
 .admin-booking-card-meta{display:flex;flex-wrap:wrap;gap:7px 17px;margin:12px 0;color:#637b91;font-size:10px}
 .admin-booking-card-meta a{color:#176caa}
 .admin-session-list{display:flex;flex-wrap:wrap;gap:7px}
@@ -1552,7 +1560,7 @@ main section[id],main [id]{scroll-margin-top:28px}
   .admin-calendar-event{align-items:flex-start;flex-wrap:wrap}
   .admin-calendar-event time{flex:1 1 100%}
   .admin-calendar-event-copy{flex-basis:calc(100% - 35px)}
-  .admin-edit-slot{grid-template-columns:1fr}
+  .admin-edit-slot,.admin-edit-fields{grid-template-columns:1fr}
   .admin-edit-actions{flex-direction:column-reverse}
   .admin-edit-actions .btn{width:100%}
   .admin-stat-card{min-height:78px;padding:11px}

@@ -22,7 +22,7 @@
             <div class="booking-slot-heading"><div><span class="eyebrow">AVAILABLE SESSIONS</span><h3 id="booking-slot-date">Loading availability…</h3></div><span class="booking-timezone">All times IST <button class="booking-availability-refresh" type="button" data-booking-refresh>Refresh</button></span></div>
             <div class="booking-slot-list" id="booking-slots" aria-live="polite"><p class="booking-inline-status">Loading available sessions…</p></div>
             <p class="booking-inline-status booking-capacity-note">A maximum of two instruments can be booked in each time slot. Each sorter booking also reserves its next session for cleaning.</p>
-            <p class="booking-inline-status" id="booking-availability-status" role="status">Availability is checked against Brown Bear every 30 seconds and again before a booking is confirmed.</p>
+            <p class="booking-inline-status" id="booking-availability-status" role="status">Availability is checked against Brown Bear every 30 seconds and again before your request is submitted.</p>
           </div>
         </section>
         <section class="booking-panel booking-details-panel" aria-labelledby="booking-details-title">
@@ -39,7 +39,7 @@
               <label class="booking-upload-field">Completed facility user form <span>*</span><input name="userForm" type="file" accept="application/pdf,.pdf" required><small>PDF only · maximum 10 MB. Use the current facility user form provided by staff; <a href="contact.html">contact the facility</a> if you need a copy.</small></label>
             </div>
             <div class="booking-selection-summary" id="booking-selection-summary">Select one or more available sessions above.</div>
-            <div class="booking-form-actions"><p id="booking-submit-status" role="status" aria-live="polite"></p><button class="btn primary" type="submit"><span class="booking-step-number">3</span> Confirm selected bookings <b>→</b></button></div>
+            <div class="booking-form-actions"><p id="booking-submit-status" role="status" aria-live="polite"></p><button class="btn primary" type="submit"><span class="booking-step-number">3</span> Submit booking request <b>→</b></button></div>
           </form>
         </section>
       </div>
@@ -51,7 +51,7 @@
   </section>
 </main>
 <dialog class="booking-confirmation-dialog" id="booking-confirmation" aria-labelledby="booking-confirmation-title">
-  <div class="booking-confirmation-icon" aria-hidden="true">✓</div><div class="eyebrow">SESSION RESERVED</div><h2 id="booking-confirmation-title">Booking confirmed</h2><p>Your selected session has been reserved. Save this booking ID for future reference.</p><strong class="booking-confirmation-id" id="booking-confirmation-id"></strong><div id="booking-confirmation-slots"></div><button class="btn primary" type="button" data-close-booking-confirmation>Done</button>
+  <div class="booking-confirmation-icon" aria-hidden="true">…</div><div class="eyebrow">REQUEST SUBMITTED</div><h2 id="booking-confirmation-title">Awaiting staff review</h2><p>Your selected sessions are held while facility staff review your request. Save this booking ID for future reference.</p><strong class="booking-confirmation-id" id="booking-confirmation-id"></strong><div id="booking-confirmation-slots"></div><p id="booking-confirmation-email" role="status"></p><button class="btn primary" type="button" data-close-booking-confirmation>Done</button>
 </dialog>
 <script src="js/site-shell.js"></script><script src="js/booking-portal.js"></script>
 </body>

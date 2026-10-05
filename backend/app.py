@@ -5,7 +5,10 @@ import os
 import re
 import secrets
 import sqlite3
+import smtplib
+import ssl
 from datetime import date, datetime, timedelta, timezone
+from email.message import EmailMessage
 from email.utils import parseaddr
 from html.parser import HTMLParser
 from pathlib import Path, PureWindowsPath
@@ -129,11 +132,45 @@ def booking_connection():
             specimen TEXT NOT NULL,
             notes TEXT NOT NULL,
             slots TEXT NOT NULL,
-            status TEXT NOT NULL CHECK (status IN ('confirmed', 'cancelled')),
+            status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'cancelled')),
             form_name TEXT NOT NULL,
             form_path TEXT NOT NULL
         )
     """)
+    schema_row = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'bookings'"
+    ).fetchone()
+    if schema_row and "'pending'" not in schema_row["sql"]:
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute("ALTER TABLE bookings RENAME TO bookings_before_review")
+        connection.execute("""
+            CREATE TABLE bookings (
+                id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                user_name TEXT NOT NULL,
+                pi_name TEXT NOT NULL,
+                phone TEXT NOT NULL,
+                email TEXT NOT NULL,
+                department TEXT NOT NULL,
+                specimen TEXT NOT NULL,
+                notes TEXT NOT NULL,
+                slots TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'cancelled')),
+                form_name TEXT NOT NULL,
+                form_path TEXT NOT NULL
+            )
+        """)
+        connection.execute("""
+            INSERT INTO bookings (
+                id, created_at, user_name, pi_name, phone, email,
+                department, specimen, notes, slots, status, form_name, form_path
+            )
+            SELECT id, created_at, user_name, pi_name, phone, email,
+                   department, specimen, notes, slots, status, form_name, form_path
+            FROM bookings_before_review
+        """)
+        connection.execute("DROP TABLE bookings_before_review")
+        connection.commit()
     return connection
 
 
@@ -150,14 +187,20 @@ class PostgresBookingConnection:
         values = list(parameters)
         if "INSERT INTO bookings" in statement and len(values) > 9:
             values[9] = self.jsonb_type(json.loads(values[9]))
-        elif "UPDATE bookings SET slots" in statement and values:
-            values[0] = self.jsonb_type(json.loads(values[0]))
+        elif "UPDATE bookings SET" in statement and "slots = ?" in statement:
+            slot_value_index = statement.split("slots = ?", 1)[0].count("?")
+            values[slot_value_index] = self.jsonb_type(
+                json.loads(values[slot_value_index])
+            )
         try:
             cursor = self.connection.execute(statement.replace("?", "%s"), values)
             if begins_transaction:
                 self.connection.execute(
                     "SELECT set_config('app.actor', %s, true)",
                     (self.actor,),
+                )
+                self.connection.execute(
+                    "SELECT pg_advisory_xact_lock(9152026, 42)"
                 )
             return cursor
         except self.database_error_type as error:
@@ -303,6 +346,9 @@ def booking_row(row):
     slots = expand_stored_slots(slots_from_row(row), instruments)
     for slot in slots:
         slot.setdefault("color", instrument_colors.get(slot["instrument"], "gray"))
+    is_uploaded_form = bool(row["form_path"]) and not row["form_path"].startswith(
+        "admin-created:"
+    )
     return {
         "id": row["id"],
         "createdAt": row["created_at"],
@@ -316,7 +362,7 @@ def booking_row(row):
         "slots": slots,
         "status": row["status"],
         "formName": row["form_name"],
-        "hasForm": bool(row["form_path"]),
+        "hasForm": is_uploaded_form,
     }
 
 
@@ -324,6 +370,103 @@ def require_admin():
     if not session.get("booking_admin"):
         return jsonify({"error": "Admin sign-in is required."}), 401
     return None
+
+
+def send_booking_email(recipient, subject, body):
+    settings = {
+        "host": os.environ.get("SMTP_HOST", "").strip(),
+        "username": os.environ.get("SMTP_USERNAME", "").strip(),
+        "password": os.environ.get("SMTP_PASSWORD", ""),
+        "sender": os.environ.get("SMTP_FROM_EMAIL", "").strip(),
+    }
+    if any(not value for value in settings.values()):
+        return {
+            "sent": False,
+            "error": "Email is not configured; set SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD, and SMTP_FROM_EMAIL.",
+        }
+    message = EmailMessage()
+    message["From"] = settings["sender"]
+    message["To"] = recipient
+    message["Subject"] = subject
+    message.set_content(body)
+    try:
+        port = int(os.environ.get("SMTP_PORT", "587"))
+        if os.environ.get("SMTP_USE_SSL", "").lower() == "true":
+            with smtplib.SMTP_SSL(
+                settings["host"], port, timeout=15,
+                context=ssl.create_default_context(),
+            ) as server:
+                server.login(settings["username"], settings["password"])
+                server.send_message(message)
+        else:
+            with smtplib.SMTP(settings["host"], port, timeout=15) as server:
+                server.starttls(context=ssl.create_default_context())
+                server.login(settings["username"], settings["password"])
+                server.send_message(message)
+    except (OSError, smtplib.SMTPException, ValueError) as error:
+        app.logger.exception("Booking notification email could not be sent")
+        return {"sent": False, "error": f"Email delivery failed: {error}"}
+    return {"sent": True, "error": None}
+
+
+def notify_booking_request(booking):
+    sessions = "\n".join(
+        f"- {slot['instrument']}: {slot['date']} {slot['time']}"
+        for slot in booking["slots"]
+    )
+    details = (
+        f"Booking ID: {booking['id']}\n"
+        f"User: {booking['userName']}\n"
+        f"PI: {booking['piName']}\n"
+        f"Email: {booking['email']}\n"
+        f"Phone: {booking['phone']}\n"
+        f"Specimen: {booking['specimen']}\n"
+        f"Sessions:\n{sessions}\n"
+    )
+    admin_email = os.environ.get("ADMIN_NOTIFICATION_EMAIL", "").strip()
+    admin_result = send_booking_email(
+        admin_email,
+        f"Booking request pending review · {booking['id']}",
+        f"A new booking request is waiting for review.\n\n{details}",
+    ) if admin_email else {
+        "sent": False,
+        "error": "Set ADMIN_NOTIFICATION_EMAIL to receive new-request alerts.",
+    }
+    user_result = send_booking_email(
+        booking["email"],
+        f"Booking request received · {booking['id']}",
+        f"Hello {booking['userName']},\n\n"
+        "Your request is being held while facility staff review it. "
+        "We will email you after a decision.\n\n"
+        f"{details}",
+    )
+    for recipient_type, result in (("facility", admin_result), ("user", user_result)):
+        if not result["sent"]:
+            app.logger.error(
+                "Booking %s %s notification was not delivered: %s",
+                booking["id"], recipient_type, result["error"],
+            )
+    return {"admin": admin_result, "user": user_result}
+
+
+def notify_booking_accepted(booking):
+    sessions = "\n".join(
+        f"- {slot['instrument']}: {slot['date']} {slot['time']}"
+        for slot in booking["slots"]
+    )
+    result = send_booking_email(
+        booking["email"],
+        f"Booking accepted · {booking['id']}",
+        f"Hello {booking['userName']},\n\n"
+        f"Your facility booking request {booking['id']} has been accepted.\n\n"
+        f"Sessions:\n{sessions}\n",
+    )
+    if not result["sent"]:
+        app.logger.error(
+            "Booking %s acceptance notification was not delivered: %s",
+            booking["id"], result["error"],
+        )
+    return result
 
 
 class BrownBearCalendarError(Exception):
@@ -491,6 +634,78 @@ def booking_conflict(candidate_slots, occupied_slots, instruments):
     return None
 
 
+def validate_booking_fields(payload):
+    fields = {
+        "user_name": str(payload.get("userName", "")).strip(),
+        "pi_name": str(payload.get("piName", "")).strip(),
+        "phone": str(payload.get("phone", "")).strip(),
+        "email": str(payload.get("email", "")).strip().lower(),
+        "department": str(payload.get("department", "")).strip(),
+        "specimen": str(payload.get("specimen", "")).strip(),
+        "notes": str(payload.get("notes", "")).strip(),
+    }
+    required = ("user_name", "pi_name", "phone", "email", "specimen")
+    if any(not fields[key] for key in required):
+        return None, "Complete all required booking details."
+    limits = {
+        "user_name": 120, "pi_name": 120, "phone": 24, "email": 254,
+        "department": 160, "specimen": 80, "notes": 1500,
+    }
+    if any(len(value) > limits[key] for key, value in fields.items()):
+        return None, "One or more booking fields exceed the allowed length."
+    digits = re.sub(r"\D", "", fields["phone"])
+    if not 10 <= len(digits) <= 15:
+        return None, "Enter a valid phone number with 10 to 15 digits."
+    if parseaddr(fields["email"])[1] != fields["email"] or not re.fullmatch(
+        r"[^@\s]+@[^@\s]+\.[^@\s]+", fields["email"]
+    ):
+        return None, "Enter a valid email address."
+    if fields["specimen"] not in SPECIMEN_TYPES:
+        return None, "Select a valid specimen type."
+    return fields, None
+
+
+def normalize_booking_slots(slots, instrument_records):
+    if not isinstance(slots, list) or not 1 <= len(slots) <= 12:
+        return None, "Choose between 1 and 12 session slots."
+    normalized = []
+    seen = set()
+    for slot in slots:
+        if not isinstance(slot, dict):
+            return None, "A selected session is invalid."
+        instrument = slot.get("instrument")
+        slot_date = slot.get("date")
+        time = slot.get("time")
+        try:
+            parsed_date = date.fromisoformat(slot_date)
+        except (TypeError, ValueError):
+            return None, "A selected session has an invalid date."
+        if (
+            instrument not in instrument_records
+            or time not in BOOKING_SLOTS_BY_TYPE.get(
+                instrument_records[instrument]["type"], ()
+            )
+            or parsed_date.weekday() not in BOOKING_WEEKDAYS
+            or parsed_date < facility_today()
+            or parsed_date > facility_today() + timedelta(days=90)
+        ):
+            return None, "A selected session is no longer available."
+        value = {
+            "instrument": instrument,
+            "date": slot_date,
+            "time": time,
+            "color": instrument_records[instrument].get("color", "gray"),
+        }
+        if slot_has_started(value):
+            return None, "A selected session has already started."
+        key = slot_identity(value)
+        if key in seen:
+            return None, "Remove duplicate session slots before saving."
+        seen.add(key)
+        normalized.append(value)
+    return normalized, None
+
+
 def brown_bear_booked_slots(events, instruments):
     instrument_records = {item["name"]: item for item in instruments}
     booked_slots = []
@@ -562,7 +777,7 @@ def get_booking_availability():
     connection = booking_connection()
     try:
         rows = connection.execute(
-            "SELECT slots FROM bookings WHERE status = 'confirmed'"
+            "SELECT slots, status FROM bookings WHERE status IN ('pending', 'confirmed')"
         ).fetchall()
     finally:
         connection.close()
@@ -585,7 +800,11 @@ def get_booking_availability():
                         ),
                     ),
                     "source": "portal",
-                    "title": "Portal booking",
+                    "title": (
+                        "Portal booking · Under review"
+                        if row["status"] == "pending" else "Portal booking"
+                    ),
+                    "status": row["status"],
                 })
     cleaning_slots = sorter_cleaning_slots(booked_slots, instrument_records)
     for instrument_name, slot_date, time in cleaning_slots:
@@ -762,7 +981,7 @@ def create_booking():
         form_path = store_booking_form(storage_key, content)
         connection.execute("BEGIN IMMEDIATE")
         existing = connection.execute(
-            "SELECT slots FROM bookings WHERE status = 'confirmed'"
+            "SELECT slots, status FROM bookings WHERE status IN ('pending', 'confirmed')"
         ).fetchall()
         occupied = [
             slot
@@ -781,7 +1000,7 @@ def create_booking():
             """INSERT INTO bookings (
                 id, created_at, user_name, pi_name, phone, email, department,
                 specimen, notes, slots, status, form_name, form_path
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?)""",
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)""",
             (
                 booking_id,
                 datetime.now(timezone.utc).isoformat(),
@@ -829,7 +1048,22 @@ def create_booking():
         if connection:
             connection.close()
 
-    return jsonify({"id": booking_id, "status": "confirmed", "slots": normalized_slots}), 201
+    booking = {
+        "id": booking_id,
+        "userName": fields["user_name"],
+        "piName": fields["pi_name"],
+        "email": fields["email"],
+        "phone": fields["phone"],
+        "specimen": fields["specimen"],
+        "slots": normalized_slots,
+    }
+    notifications = notify_booking_request(booking)
+    return jsonify({
+        "id": booking_id,
+        "status": "pending",
+        "slots": normalized_slots,
+        "notifications": notifications,
+    }), 201
 
 
 @app.get("/api/admin/session")
@@ -899,7 +1133,7 @@ def get_admin_calendar():
     connection = booking_connection()
     try:
         rows = connection.execute(
-            "SELECT id, user_name, slots FROM bookings WHERE status = 'confirmed'"
+            "SELECT id, user_name, slots, status FROM bookings WHERE status IN ('pending', 'confirmed')"
         ).fetchall()
     finally:
         connection.close()
@@ -913,7 +1147,10 @@ def get_admin_calendar():
                 events.append({
                     "date": slot["date"],
                     "time": slot["time"],
-                    "title": row["user_name"],
+                    "title": (
+                        f"{row['user_name']} · Under review"
+                        if row["status"] == "pending" else row["user_name"]
+                    ),
                     "instrument": slot["instrument"],
                     "color": slot.get(
                         "color", instrument_colors.get(slot["instrument"], "gray")
@@ -942,8 +1179,8 @@ def update_admin_booking(booking_id):
     if not isinstance(payload, dict):
         return jsonify({"error": "Submit the booking status as a JSON object."}), 400
     status = payload.get("status")
-    if status not in ("confirmed", "cancelled"):
-        return jsonify({"error": "Choose confirmed or cancelled as the booking status."}), 400
+    if status not in ("pending", "confirmed", "cancelled"):
+        return jsonify({"error": "Choose pending, confirmed, or cancelled as the booking status."}), 400
 
     connection = booking_connection()
     try:
@@ -957,7 +1194,10 @@ def update_admin_booking(booking_id):
             item["name"]: item for item in load_json("instruments.json")
         }
         calendar_booked = []
-        if status == "confirmed" and row["status"] != "confirmed":
+        needs_availability_check = (
+            status in ("pending", "confirmed") and row["status"] == "cancelled"
+        ) or (status == "confirmed" and row["status"] == "pending")
+        if needs_availability_check:
             restoring_slots = expand_stored_slots(
                 slots_from_row(row), instrument_records
             )
@@ -983,7 +1223,10 @@ def update_admin_booking(booking_id):
         if row["status"] != initial_status:
             connection.rollback()
             return jsonify({"error": "The booking status changed. Refresh the admin booking list."}), 409
-        if status == "confirmed" and row["status"] != "confirmed":
+        needs_availability_check = (
+            status in ("pending", "confirmed") and row["status"] == "cancelled"
+        ) or (status == "confirmed" and row["status"] == "pending")
+        if needs_availability_check:
             restoring_slots = expand_stored_slots(
                 slots_from_row(row), instrument_records
             )
@@ -991,7 +1234,7 @@ def update_admin_booking(booking_id):
                 connection.rollback()
                 return jsonify({"error": "A past session cannot be restored."}), 409
             existing = connection.execute(
-                "SELECT id, slots FROM bookings WHERE status = 'confirmed' AND id != ?",
+                "SELECT id, slots FROM bookings WHERE status IN ('pending', 'confirmed') AND id != ?",
                 (booking_id,),
             ).fetchall()
             occupied = [
@@ -1026,9 +1269,190 @@ def update_admin_booking(booking_id):
         return jsonify({"error": "The session is already reserved by another booking."}), 409
     finally:
         connection.close()
-    response = jsonify({"booking": booking_row(updated)})
+    notification = None
+    if status == "confirmed" and initial_status != "confirmed":
+        notification = notify_booking_accepted(booking_row(updated))
+    response = jsonify({
+        "booking": booking_row(updated),
+        "notification": notification,
+    })
     response.headers["Cache-Control"] = "no-store"
     return response
+
+
+def admin_booking_payload(payload):
+    fields, error = validate_booking_fields(payload)
+    if error:
+        return None, None, error
+    slots, error = normalize_booking_slots(
+        payload.get("slots"),
+        {item["name"]: item for item in load_json("instruments.json")},
+    )
+    if error:
+        return None, None, error
+    return fields, slots, None
+
+
+def get_calendar_conflicts(slots, instruments):
+    try:
+        events = brown_bear_events_between(
+            min(date.fromisoformat(slot["date"]) for slot in slots),
+            max(date.fromisoformat(slot["date"]) for slot in slots),
+        )
+    except BrownBearCalendarError as error:
+        return None, None, str(error)
+    booked = brown_bear_booked_slots(events, list(instruments.values()))
+    if {slot_identity(slot) for slot in slots} & {
+        slot_identity(slot) for slot in booked
+    }:
+        return booked, "A selected session conflicts with the Brown Bear calendar.", None
+    conflict = booking_conflict(slots, booked, instruments)
+    return booked, conflict, None
+
+
+@app.post("/api/admin/bookings")
+def create_admin_booking():
+    denied = require_admin()
+    if denied:
+        return denied
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Submit the booking details as a JSON object."}), 400
+    fields, slots, error = admin_booking_payload(payload)
+    if error:
+        return jsonify({"error": error}), 400
+    instruments = {item["name"]: item for item in load_json("instruments.json")}
+    calendar_booked, error, calendar_error = get_calendar_conflicts(slots, instruments)
+    if calendar_error:
+        return jsonify({"error": calendar_error}), 502
+    if error:
+        return jsonify({"error": error}), 409
+
+    booking_id = f"FC-{facility_today():%y%m%d}-{secrets.token_hex(3).upper()}"
+    created_at = datetime.now(timezone.utc).isoformat()
+    form_path = f"admin-created:{booking_id}"
+    try:
+        connection = booking_connection()
+    except BookingConfigurationError as error:
+        return jsonify({"error": str(error)}), 503
+    except (sqlite3.Error, BookingDatabaseError):
+        app.logger.exception("Unable to connect to the booking database")
+        return jsonify({"error": "The booking database is temporarily unavailable."}), 503
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        existing = connection.execute(
+            "SELECT slots FROM bookings WHERE status IN ('pending', 'confirmed')"
+        ).fetchall()
+        occupied = [
+            slot
+            for row in existing
+            for slot in expand_stored_slots(slots_from_row(row), instruments)
+        ]
+        conflict = booking_conflict(slots, calendar_booked + occupied, instruments)
+        if conflict:
+            connection.rollback()
+            return jsonify({"error": conflict}), 409
+        connection.execute(
+            """INSERT INTO bookings (
+                id, created_at, user_name, pi_name, phone, email, department,
+                specimen, notes, slots, status, form_name, form_path
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?)""",
+            (
+                booking_id, created_at, fields["user_name"], fields["pi_name"],
+                fields["phone"], fields["email"], fields["department"],
+                fields["specimen"], fields["notes"], json.dumps(slots),
+                "Added by facility staff", form_path,
+            ),
+        )
+        connection.commit()
+        created = connection.execute(
+            "SELECT * FROM bookings WHERE id = ?", (booking_id,)
+        ).fetchone()
+    except (sqlite3.IntegrityError, BookingSlotConflict):
+        connection.rollback()
+        return jsonify({"error": "One or more selected slots were just booked. Refresh availability."}), 409
+    except (sqlite3.Error, BookingDatabaseError):
+        connection.rollback()
+        app.logger.exception("Unable to create the staff booking")
+        return jsonify({"error": "The staff booking could not be saved."}), 500
+    finally:
+        connection.close()
+    booking = booking_row(created)
+    return jsonify({
+        "booking": booking,
+        "notification": notify_booking_accepted(booking),
+    }), 201
+
+
+@app.put("/api/admin/bookings/<booking_id>")
+def edit_admin_booking(booking_id):
+    denied = require_admin()
+    if denied:
+        return denied
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Submit the booking details as a JSON object."}), 400
+    fields, slots, error = admin_booking_payload(payload)
+    if error:
+        return jsonify({"error": error}), 400
+    instruments = {item["name"]: item for item in load_json("instruments.json")}
+    calendar_booked, error, calendar_error = get_calendar_conflicts(slots, instruments)
+    if calendar_error:
+        return jsonify({"error": calendar_error}), 502
+    if error:
+        return jsonify({"error": error}), 409
+    try:
+        connection = booking_connection()
+    except BookingConfigurationError as error:
+        return jsonify({"error": str(error)}), 503
+    except (sqlite3.Error, BookingDatabaseError):
+        app.logger.exception("Unable to connect to the booking database")
+        return jsonify({"error": "The booking database is temporarily unavailable."}), 503
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        current = connection.execute(
+            "SELECT * FROM bookings WHERE id = ?", (booking_id,)
+        ).fetchone()
+        if current is None:
+            connection.rollback()
+            return jsonify({"error": "Booking not found."}), 404
+        if current["status"] in ("pending", "confirmed"):
+            existing = connection.execute(
+                "SELECT id, slots FROM bookings WHERE status IN ('pending', 'confirmed') AND id != ?",
+                (booking_id,),
+            ).fetchall()
+            occupied = [
+                slot
+                for row in existing
+                for slot in expand_stored_slots(slots_from_row(row), instruments)
+            ]
+            conflict = booking_conflict(slots, calendar_booked + occupied, instruments)
+            if conflict:
+                connection.rollback()
+                return jsonify({"error": conflict}), 409
+        connection.execute(
+            """UPDATE bookings SET user_name = ?, pi_name = ?, phone = ?, email = ?,
+                department = ?, specimen = ?, notes = ?, slots = ? WHERE id = ?""",
+            (
+                fields["user_name"], fields["pi_name"], fields["phone"],
+                fields["email"], fields["department"], fields["specimen"],
+                fields["notes"], json.dumps(slots), booking_id,
+            ),
+        )
+        updated = connection.execute(
+            "SELECT * FROM bookings WHERE id = ?", (booking_id,)
+        ).fetchone()
+        connection.commit()
+    except (sqlite3.IntegrityError, BookingSlotConflict):
+        connection.rollback()
+        return jsonify({"error": "One or more selected slots were just booked. Refresh availability."}), 409
+    except (sqlite3.Error, BookingDatabaseError):
+        connection.rollback()
+        app.logger.exception("Unable to update the staff booking")
+        return jsonify({"error": "The booking could not be updated."}), 500
+    finally:
+        connection.close()
+    return jsonify({"booking": booking_row(updated)})
 
 
 @app.put("/api/admin/bookings/<booking_id>/slots")
@@ -1109,11 +1533,11 @@ def update_admin_booking_slots(booking_id):
         if row is None:
             connection.rollback()
             return jsonify({"error": "Booking not found."}), 404
-        if row["status"] != "confirmed":
+        if row["status"] not in ("pending", "confirmed"):
             connection.rollback()
-            return jsonify({"error": "Only confirmed bookings can be rescheduled."}), 409
+            return jsonify({"error": "Only active bookings can be rescheduled."}), 409
         existing = connection.execute(
-            "SELECT id, slots FROM bookings WHERE status = 'confirmed' AND id != ?",
+            "SELECT id, slots FROM bookings WHERE status IN ('pending', 'confirmed') AND id != ?",
             (booking_id,),
         ).fetchall()
         occupied = [
@@ -1167,7 +1591,11 @@ def delete_admin_booking(booking_id):
     finally:
         connection.close()
 
-    form_deleted = remove_booking_form(form_path)
+    form_deleted = (
+        True
+        if form_path.startswith("admin-created:")
+        else remove_booking_form(form_path)
+    )
     response = jsonify({"deleted": True, "formDeleted": form_deleted})
     response.headers["Cache-Control"] = "no-store"
     return response
@@ -1369,7 +1797,7 @@ def get_calendar():
         connection = booking_connection()
         try:
             rows = connection.execute(
-                "SELECT slots FROM bookings WHERE status = 'confirmed'"
+                "SELECT slots, status FROM bookings WHERE status IN ('pending', 'confirmed')"
             ).fetchall()
         finally:
             connection.close()
@@ -1388,7 +1816,10 @@ def get_calendar():
                 events.append({
                     "date": slot["date"],
                     "time": slot["time"],
-                    "title": "Portal booking",
+                    "title": (
+                        "Portal booking · Under review"
+                        if row["status"] == "pending" else "Portal booking"
+                    ),
                     "instrument": slot["instrument"],
                     "color": slot.get("color", instrument_colors.get(slot["instrument"], "gray")),
                     "source": "portal",

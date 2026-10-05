@@ -26,10 +26,10 @@ preview; the live schedule requires the backend to be running.
 - Live Brown Bear instrument category colors are mapped to the facility's
   instrument palette in the homepage overview
 - Multi-instrument booking form with live slot availability, booking details,
-  required completed user-form upload, immediate confirmations and slot conflict checks
+  required completed user-form upload, pending staff review and slot conflict checks
 - Password-protected booking dashboard with an interactive weekday month grid,
-  selected-day agenda and instrument filter; website bookings can be rescheduled
-  and deleted, with status management and secure form downloads
+  selected-day agenda and instrument filter; staff can review, accept, decline,
+  create, edit and delete website bookings, with secure form downloads
 - Supabase PostgreSQL and private Storage deployment path for durable hosted
   bookings, session conflict constraints, form files and audit history
 - Hover and focus elevation on cards and links
@@ -37,12 +37,16 @@ preview; the live schedule requires the backend to be running.
 - Facility committee, staff, offline-analysis software, research links,
   facility documents and workshop archive
 
-The facility calendar combines live Brown Bear sessions with confirmed website
-bookings. The booking portal checks Brown Bear event times as well as portal
-reservations, and overlapping slots are marked unavailable and rejected by the
-booking API. Availability refreshes every 30 seconds while the booking page is
-visible, on return to the page, and immediately before submission. Confirmed
-portal bookings appear on the website calendar and homepage overview. Brown
+The facility calendar combines live Brown Bear sessions with pending and
+confirmed website bookings. A submitted request blocks its selected slots while
+it awaits staff review; accepting it confirms the booking and emails the user.
+New requests generate an acknowledgement to the user and a notification to the
+configured facility administrator. The booking portal checks Brown Bear event
+times as well as portal reservations, and overlapping slots are marked
+unavailable and rejected by the booking API. Availability refreshes every 30
+seconds while the booking page is visible, on return to the page, and
+immediately before submission. Pending and confirmed portal bookings appear on
+the website calendar and homepage overview. Brown
 Bear remains managed separately: this site has no write access to that external
 calendar, so website bookings are not written back to Brown Bear.
 Sessions run hourly from 10:00 AM to 1:00 PM and 2:00 PM to 5:00 PM. Consecutive
@@ -66,12 +70,15 @@ The Flask API exposes:
 - `GET /api/health`
 - `GET /api/instruments`
 - `GET /api/content`
-- `GET /api/calendar?month=YYYY-MM` (Brown Bear schedule plus confirmed portal sessions)
+- `GET /api/calendar?month=YYYY-MM` (Brown Bear schedule plus pending/confirmed portal sessions)
 - `GET /api/booking-availability?start=YYYY-MM-DD&end=YYYY-MM-DD`
 - `POST /api/bookings` (multipart booking details and completed PDF form)
 - `POST /api/admin/login`, `POST /api/admin/logout`
 - `GET /api/admin/bookings`, `GET /api/admin/calendar?month=YYYY-MM`
-- `PATCH /api/admin/bookings/<id>`, `PUT /api/admin/bookings/<id>/slots`
+- `POST /api/admin/bookings` (create a confirmed staff booking)
+- `PUT /api/admin/bookings/<id>` (edit booking details and sessions)
+- `PATCH /api/admin/bookings/<id>` (change booking status)
+- `PUT /api/admin/bookings/<id>/slots` (reschedule sessions)
 - `DELETE /api/admin/bookings/<id>`
 - `GET /api/admin/bookings/<id>/form` (admin-only download)
 
@@ -90,6 +97,11 @@ Open `http://127.0.0.1:5000/booking.html` to book a session and
 on the server before using the admin portal. For a deployed HTTPS site, set
 `BOOKING_COOKIE_SECURE=true` and persist both the Flask `instance` directory
 (booking database and uploaded forms) and the session secret across restarts.
+Configure `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `SMTP_FROM_EMAIL`
+to send mail; configure `ADMIN_NOTIFICATION_EMAIL` for new-request alerts.
+Optional settings are `SMTP_PORT` (defaults to 587) and `SMTP_USE_SSL`.
+Without working mail configuration, bookings are still saved, but the API and
+portal report that delivery failed instead of claiming that mail was sent.
 For Supabase-backed hosting, follow [SUPABASE_SETUP.md](./SUPABASE_SETUP.md);
 the server uses Supabase PostgreSQL and a private Storage bucket when
 `DATABASE_URL` is configured, and retains SQLite for local development.
