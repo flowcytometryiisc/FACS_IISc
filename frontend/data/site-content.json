@@ -5,12 +5,12 @@
     "accessed": "2026-09-29"
   },
   "facility": {
-    "name": "Flow Cytometry Facility",
-    "alsoKnownAs": "FACS (Fluorescence Activated Cell Sorter) Facility",
+    "name": "Divisional FACS Facility",
+    "alsoKnownAs": "Divisional FACS Facility",
     "established": "1997",
     "support": "Department of Biotechnology, Government of India",
     "location": "Ground Floor, GC-03, Biological Sciences Building, Indian Institute of Science, Bangalore-560012",
-    "description": "The FACS facility was established in 1997 with support from DBT, Government of India. Its current instrument lineup includes four flow cytometers for advanced scientific research. All are operator-assisted. The facility also has offline analysis systems for flow-cytometry users.",
+    "description": "The Divisional FACS Facility was established in 1997 with support from DBT, Government of India. Its current instrument lineup includes four flow cytometers for advanced scientific research. All are operator-assisted. The facility also has offline analysis systems for flow-cytometry users.",
     "capabilities": [
       "Flow cytometry analysis",
       "High-speed cell sorting",
@@ -194,7 +194,7 @@
     "past": [
       {
         "title": "Basics of Flow Cytometry and Immunophenotyping",
-        "organizers": "FACS Facility, Division of Biological Sciences, IISc and Beckman Coulter",
+        "organizers": "Divisional FACS Facility, Division of Biological Sciences, IISc and Beckman Coulter",
         "date": "2024-07-26/2024-07-27",
         "duration": "2 days",
         "description": "Two days of sessions on the fundamental principles and applications of flow cytometry, including immunophenotyping, with an in-depth look at the Beckman Coulter CytoFLEX LX Flow Cytometer.",

@@ -20,9 +20,9 @@ const main = document.querySelector("main");
 const sidebar = document.createElement("aside");
 sidebar.className = "site-sidebar";
 sidebar.innerHTML = `
-  <a class="sidebar-brand" href="index.html" aria-label="Flow Cytometry Facility home">
+  <a class="sidebar-brand" href="index.html" aria-label="Divisional FACS Facility home">
     <span class="brand-logo"><img class="brand-seal" src="assets/images/site/iisc-seal.jpg" alt="Indian Institute of Science seal"></span>
-    <span class="sidebar-brand-copy"><strong>IISc</strong><small>Flow Cytometry<br>Facility</small></span>
+    <span class="sidebar-brand-copy"><strong>IISc</strong><small>Divisional FACS<br>Facility</small></span>
   </a>
   <button class="menu-toggle" aria-label="Open navigation" aria-expanded="false" aria-controls="site-navigation"><span></span><span></span><span></span></button>
   <nav class="nav" id="site-navigation" aria-label="Main navigation">
@@ -58,5 +58,5 @@ siteMain.insertAdjacentHTML("beforeend", `
         <a href="about.html">About</a><a href="people.html">People</a><a href="instruments.html">Instruments</a><a href="services.html">Services</a><a href="data-analysis.html">Data Analysis</a><a href="resources.html">Resources</a><a href="forms.html">Forms</a><a href="booking.html">Book a slot</a><a href="admin.html">Admin portal</a><a href="workshops.html">Workshops</a><a href="calendar.html">Calendar</a><a href="contact.html">Contact</a>
       </nav>
     </div>
-    <div class="container footer-bottom"><span>© 2026 Flow Cytometry Facility, IISc</span><a href="https://www.iisc.ac.in/" target="_blank" rel="noreferrer">Indian Institute of Science ↗</a></div>
+    <div class="container footer-bottom"><span>© 2026 Divisional FACS Facility, IISc</span><a href="https://www.iisc.ac.in/" target="_blank" rel="noreferrer">Indian Institute of Science ↗</a></div>
   </footer>  `);
