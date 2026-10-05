@@ -366,8 +366,8 @@ if (adminPortal) {
         <legend>Session ${index + 1}</legend>
         <label>Instrument<select name="instrument" required>${instrumentOptions}</select></label>
         <label>Date<input name="date" type="date" min="${facilityDateOffset()}" max="${facilityDateOffset(90)}" required value="${escapeHTML(slot.date)}"></label>
-        <label>Time<select name="time" required>${bookingTimes.map((time, timeIndex) =>
-          `${timeIndex === 3 ? '<option disabled>Lunch · 1:00 – 2:00 PM</option>' : ""}<option value="${time}">${formatTimeSlot(time)}</option>`
+        <label>Time<select name="time" required>${bookingTimes.map(time =>
+          `<option value="${time}">${formatTimeSlot(time)}</option>`
         ).join("")}</select></label>
       </fieldset>`).join("");
     [...editSlots.querySelectorAll("[data-edit-slot]")].forEach((row, index) => {

@@ -109,7 +109,7 @@ if (bookingPortal) {
       const name = instrument.name.replace(/[&<>"']/g, character => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
       })[character]);
-      const timeOptions = timeSlots.map((time, index) => {
+      const timeOptions = timeSlots.map(time => {
         const slot = { instrument: instrument.name, date: selectedDate, time };
         const key = slotKey(slot);
         const selected = selectedSlots.has(key);
@@ -155,7 +155,7 @@ if (bookingPortal) {
                     : unavailable ? "Unavailable" : "Available";
         const disabled = booked || cleaning || unavailable || availabilityRefreshing;
         const button = `<button type="button" class="booking-time-slot${selected ? " selected" : ""}${booked ? " booked" : ""}${cleaning ? " cleaning" : ""}${unavailable ? " unavailable" : ""}" data-slot-key="${key}" ${disabled ? "disabled" : ""} aria-pressed="${selected}"><span>${formatTimeSlot(time)}</span><small>${availabilityRefreshing && !booked && !cleaning && !unavailable ? "Checking…" : status}</small></button>`;
-        return `${index === 3 ? '<div class="booking-lunch-break">Lunch · 1:00 – 2:00 PM</div>' : ""}${button}`;
+        return button;
       }).join("");
       return `<section class="booking-instrument-slots" data-instrument-color="${instrument.color || "gray"}"><h4>${name} · ${instrument.type}</h4><div class="booking-time-grid">${timeOptions}</div></section>`;
     }).join("");
