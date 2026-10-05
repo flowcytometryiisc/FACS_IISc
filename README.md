@@ -15,19 +15,17 @@ preview; the live schedule requires the backend to be running.
 - Persistent dark navigation rail with a compact mobile menu
 - Simple research-focused homepage with direct links to detailed pages
 - Separate About, People, Instruments, Services, Data Analysis, Resources,
-  Forms, booking portal, staff admin portal, Workshops, Calendar and Contact pages
+  Forms, booking portal, staff admin portal, Workshops and Contact pages
 - Instrument cards with analyzer/sorter filters
 - Mobile navigation with active-page and instrument-filter highlighting
 - Original team portraits from the previous facility site, stored with the
   People page assets
 - Individual supplied image tiles for the homepage, each page header, and the
   IISc seal and campus image in the sidebar
-- Dedicated calendar page with a date navigator and live monthly bookings
-  fetched from Brown Bear and displayed in the website's own layout
 - Homepage monthly overview chart with day-by-day Brown Bear calendar and portal
   booking counts, daily details, month navigation and live refresh
 - Live Brown Bear instrument category colors are mapped to the facility's
-  instrument palette in both the homepage overview and full calendar
+  instrument palette in the homepage overview
 - Multi-instrument booking form with live slot availability, booking details,
   required completed user-form upload, immediate confirmations and slot conflict checks
 - Password-protected booking dashboard with an interactive weekday month grid,

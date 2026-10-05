@@ -10,7 +10,6 @@ const sitePages = [
   { file: "booking.html", label: "Book a slot", icon: "M3 5h18v16H3zM7 3v4m10-4v4M3 10h18m5 3 5 3-5 3z" },
   { file: "admin.html", label: "Admin portal", icon: "M12 3 4 6v5c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6zm-3 9 2 2 4-4" },
   { file: "workshops.html", label: "Workshops", icon: "M3 5h18v16H3zM7 3v4m10-4v4M3 10h18m5 3 5 3-5 3z" },
-  { file: "calendar.html", label: "Calendar", icon: "M3 5h18v16H3zM7 3v4m10-4v4M3 10h18M8 14h2m4 0h2m-8 4h2m4 0h2" },
   { file: "contact.html", label: "Contact", icon: "M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Zm-5 0a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" }
 ];
 
@@ -55,7 +54,7 @@ siteMain.insertAdjacentHTML("beforeend", `
     <div class="container footer-top">
       <a class="footer-brand" href="index.html"><span class="brand-logo">IISc</span><span><strong>Indian Institute of Science</strong><small>Bengaluru</small></span></a>
       <nav class="footer-links" aria-label="Footer navigation">
-        <a href="about.html">About</a><a href="people.html">People</a><a href="instruments.html">Instruments</a><a href="services.html">Services</a><a href="data-analysis.html">Data Analysis</a><a href="resources.html">Resources</a><a href="forms.html">Forms</a><a href="booking.html">Book a slot</a><a href="admin.html">Admin portal</a><a href="workshops.html">Workshops</a><a href="calendar.html">Calendar</a><a href="contact.html">Contact</a>
+        <a href="about.html">About</a><a href="people.html">People</a><a href="instruments.html">Instruments</a><a href="services.html">Services</a><a href="data-analysis.html">Data Analysis</a><a href="resources.html">Resources</a><a href="forms.html">Forms</a><a href="booking.html">Book a slot</a><a href="admin.html">Admin portal</a><a href="workshops.html">Workshops</a><a href="contact.html">Contact</a>
       </nav>
     </div>
     <div class="container footer-bottom"><span>© 2026 Divisional FACS Facility, IISc</span><a href="https://www.iisc.ac.in/" target="_blank" rel="noreferrer">Indian Institute of Science ↗</a></div>
