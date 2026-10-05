@@ -12,6 +12,10 @@ if (adminPortal) {
   const statusFilter = adminPortal.querySelector("#admin-status-filter");
   const detailDialog = document.querySelector("#admin-booking-detail");
   const detailContent = document.querySelector("#admin-detail-content");
+  const closureConfirmDialog = document.querySelector("#admin-closure-confirm");
+  const closureConfirmName = document.querySelector("#admin-closure-confirm-name");
+  const closureConfirmStatus = document.querySelector("#admin-closure-confirm-status");
+  const closureConfirmButton = document.querySelector("#admin-confirm-remove-closure");
   const calendarMonthInput = adminPortal.querySelector("#admin-calendar-month");
   const calendarStatus = adminPortal.querySelector("#admin-calendar-status");
   const calendarEvents = adminPortal.querySelector("#admin-calendar-events");
@@ -29,6 +33,7 @@ if (adminPortal) {
   let creatingBooking = false;
   let currentCalendarEvents = [];
   let calendarClosures = [];
+  let pendingClosureRemovalId = "";
   let calendarFetchedAt = "";
   let selectedCalendarDate = "";
   let calendarRequestId = 0;
@@ -54,6 +59,40 @@ if (adminPortal) {
       const hour = Number(hourText);
       return `${hour % 12 || 12}:${minute} ${hour < 12 ? "AM" : "PM"}`;
     }).join(" – ");
+  }
+
+  function requestClosureRemoval(closureId) {
+    const closure = calendarClosures.find(item => item.id === closureId);
+    if (!closure) {
+      dashboardStatus.textContent = "This closure is no longer in the list. Refresh the calendar.";
+      return;
+    }
+    const type = closure.type === "exception" ? "Exception holiday" : "Workshop holiday";
+    const dates = closure.startDate === closure.endDate
+      ? formatDate(closure.startDate)
+      : `${formatDate(closure.startDate)} – ${formatDate(closure.endDate)}`;
+    closureConfirmName.textContent = `${type} · ${dates} · ${closure.remark}`;
+    closureConfirmStatus.textContent = "";
+    pendingClosureRemovalId = closureId;
+    closureConfirmDialog.showModal();
+  }
+
+  async function removeCalendarClosure() {
+    if (!pendingClosureRemovalId) return;
+    closureConfirmButton.disabled = true;
+    closureConfirmStatus.textContent = "Removing closure…";
+    try {
+      await fetchJSON(`${apiBase}/admin/calendar-closures/${encodeURIComponent(pendingClosureRemovalId)}`, {
+        method: "DELETE",
+      });
+      pendingClosureRemovalId = "";
+      closureConfirmDialog.close();
+      await Promise.all([loadCalendarClosures(), loadFacilityCalendar()]);
+    } catch (error) {
+      closureConfirmStatus.textContent = error.message;
+    } finally {
+      closureConfirmButton.disabled = false;
+    }
   }
 
   function facilityDateOffset(days = 0) {
@@ -606,19 +645,7 @@ if (adminPortal) {
     }
     const closureDeleteButton = event.target.closest("[data-calendar-closure-delete]");
     if (closureDeleteButton) {
-      if (!window.confirm("Remove this calendar closure? Bookings may become available again.")) return;
-      closureDeleteButton.disabled = true;
-      void (async () => {
-        try {
-          await fetchJSON(`${apiBase}/admin/calendar-closures/${encodeURIComponent(closureDeleteButton.dataset.calendarClosureDelete)}`, {
-            method: "DELETE",
-          });
-          await Promise.all([loadCalendarClosures(), loadFacilityCalendar()]);
-        } catch (error) {
-          dashboardStatus.textContent = error.message;
-          closureDeleteButton.disabled = false;
-        }
-      })();
+      requestClosureRemoval(closureDeleteButton.dataset.calendarClosureDelete);
     }
   });
 
@@ -746,17 +773,26 @@ if (adminPortal) {
   closureList.addEventListener("click", async event => {
     const button = event.target.closest("[data-closure-delete]");
     if (!button) return;
-    if (!window.confirm("Remove this calendar closure? Bookings may become available again.")) return;
-    button.disabled = true;
-    try {
-      await fetchJSON(`${apiBase}/admin/calendar-closures/${encodeURIComponent(button.dataset.closureDelete)}`, {
-        method: "DELETE",
-      });
-      await Promise.all([loadCalendarClosures(), loadFacilityCalendar()]);
-    } catch (error) {
-      dashboardStatus.textContent = error.message;
-      button.disabled = false;
+    requestClosureRemoval(button.dataset.closureDelete);
+  });
+
+  closureConfirmButton.addEventListener("click", () => { void removeCalendarClosure(); });
+  closureConfirmDialog.querySelector("[data-cancel-closure-removal]").addEventListener("click", () => {
+    pendingClosureRemovalId = "";
+    closureConfirmDialog.close();
+  });
+  closureConfirmDialog.addEventListener("click", event => {
+    if (event.target === closureConfirmDialog && !closureConfirmButton.disabled) {
+      pendingClosureRemovalId = "";
+      closureConfirmDialog.close();
     }
+  });
+  closureConfirmDialog.addEventListener("cancel", event => {
+    if (closureConfirmButton.disabled) {
+      event.preventDefault();
+      return;
+    }
+    pendingClosureRemovalId = "";
   });
 
   const now = new Date();

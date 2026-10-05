@@ -1373,6 +1373,20 @@ main section[id],main [id]{scroll-margin-top:28px}
 .booking-confirmation-id{display:block;margin:0 auto 7px;color:#096aba;font:800 19px Manrope,Inter,sans-serif;letter-spacing:.7px}
 .booking-confirmation-dialog #booking-confirmation-slots{margin-bottom:17px;color:#72869a;font-size:11px}
 .booking-confirmation-dialog .btn{min-height:38px;padding:9px 22px;font-size:11px}
+.admin-confirm-dialog{width:min(440px,calc(100% - 32px));margin:auto;padding:28px;border:1px solid #e0e9f1;border-radius:18px;background:linear-gradient(180deg,#fff,#f9fbfe);color:#445d73;box-shadow:0 28px 90px rgba(11,35,59,.28);text-align:left}
+.admin-confirm-dialog::backdrop{background:rgba(8,27,47,.52);backdrop-filter:blur(5px)}
+.admin-confirm-icon{display:grid;place-items:center;width:42px;height:42px;margin-bottom:15px;border:1px solid #f0d1d1;border-radius:13px;background:#fff3f2;color:#b64d48;font:800 19px Manrope,Inter,sans-serif}
+.admin-confirm-dialog>.eyebrow{color:#7188a0;font-size:9px;letter-spacing:.1em}
+.admin-confirm-dialog h2{margin:5px 0 12px;color:#163957;font:800 22px/1.25 Manrope,Inter,sans-serif}
+.admin-confirm-dialog>p{margin:0;color:#70859a;font-size:11px;line-height:1.6}
+.admin-confirm-dialog .admin-confirm-name{margin:0 0 9px;padding:11px 12px;border:1px solid #dce8ef;border-left:3px solid #0891b2;border-radius:9px;background:#f3fafc;color:#2d4c65;font-size:11px;font-weight:700;overflow-wrap:anywhere}
+.admin-confirm-dialog .admin-confirm-status{min-height:0;margin-top:11px;color:#a43e3e;font-size:10px}
+.admin-confirm-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;padding-top:15px;border-top:1px solid #e7edf3}
+.admin-confirm-actions .btn{min-height:38px;padding:8px 13px;border-radius:8px;font-size:10px}
+.admin-confirm-remove{min-height:38px;padding:8px 14px;border:1px solid #a8423e;border-radius:8px;background:linear-gradient(135deg,#c2524b,#a93f3a);color:#fff;font:700 10px Inter,Arial,sans-serif;cursor:pointer;box-shadow:0 4px 10px rgba(169,63,58,.17);transition:transform .15s,box-shadow .15s,background .15s}
+.admin-confirm-remove:hover:not(:disabled){transform:translateY(-1px);background:linear-gradient(135deg,#b54943,#943531);box-shadow:0 7px 15px rgba(169,63,58,.23)}
+.admin-confirm-remove:focus-visible,.admin-confirm-actions .btn:focus-visible{outline:3px solid #a8d2f1;outline-offset:2px}
+.admin-confirm-remove:disabled{opacity:.6;cursor:wait}
 
 .admin-portal{min-height:330px}
 .admin-login-panel{max-width:440px;margin:16px auto 35px;padding:27px}

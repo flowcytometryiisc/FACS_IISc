@@ -87,6 +87,18 @@
     <div class="admin-edit-actions"><button class="btn outline" type="button" data-close-admin-edit>Cancel</button><button class="btn primary" type="submit">Save booking</button></div>
   </form>
 </dialog>
+<dialog class="admin-confirm-dialog" id="admin-closure-confirm" aria-labelledby="admin-closure-confirm-title" aria-describedby="admin-closure-confirm-description">
+  <div class="admin-confirm-icon" aria-hidden="true">!</div>
+  <span class="eyebrow">CALENDAR CLOSURE</span>
+  <h2 id="admin-closure-confirm-title">Remove this closure?</h2>
+  <p id="admin-closure-confirm-name" class="admin-confirm-name"></p>
+  <p id="admin-closure-confirm-description">Removing it may make the affected booking sessions available again.</p>
+  <p class="admin-confirm-status" id="admin-closure-confirm-status" role="status" aria-live="polite"></p>
+  <div class="admin-confirm-actions">
+    <button class="btn outline" type="button" data-cancel-closure-removal>Keep closure</button>
+    <button class="admin-confirm-remove" type="button" id="admin-confirm-remove-closure">Remove closure</button>
+  </div>
+</dialog>
 <script src="js/site-shell.js"></script><script src="js/admin-portal.js"></script>
 </body>
 </html>
