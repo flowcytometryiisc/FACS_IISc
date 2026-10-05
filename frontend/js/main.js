@@ -159,11 +159,7 @@ hashFilter?.click();
 const calendarBrowser = document.querySelector("[data-calendar-browser]");
 
 if (calendarBrowser) {
-  const calendarApiUrl = calendarBrowser.dataset.calendarApi || (
-    window.location.protocol === "file:"
-      ? "http://127.0.0.1:5000/api/calendar"
-      : "/api/calendar"
-  );
+  const calendarApiUrl = calendarBrowser.dataset.calendarApi || "/api/calendar";
   const monthLabel = calendarBrowser.querySelector("#calendar-month");
   const dateInput = calendarBrowser.querySelector("#calendar-date");
   const dateGrid = calendarBrowser.querySelector("#calendar-dates");

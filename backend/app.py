@@ -12,22 +12,93 @@ from email.message import EmailMessage
 from email.utils import parseaddr
 from html.parser import HTMLParser
 from pathlib import Path, PureWindowsPath
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from flask import Flask, has_request_context, jsonify, request, send_file, send_from_directory, session
-from flask_cors import CORS
 from werkzeug.utils import secure_filename
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 BASE = Path(__file__).resolve().parents[1]
 CALENDAR_URL = "https://www.brownbearsw.com/cal/flow_cytometry"
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
-app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-app.config["SESSION_COOKIE_SECURE"] = os.environ.get("BOOKING_COOKIE_SECURE", "").lower() == "true"
-CORS(app)
+app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SECURE"] = (
+    os.environ.get("BOOKING_COOKIE_SECURE", "").lower() == "true"
+    or os.environ.get("APP_ENV", "").lower() == "production"
+)
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=15)
+app.config["SESSION_REFRESH_EACH_REQUEST"] = False
+trusted_proxy_hops = int(os.environ.get("TRUSTED_PROXY_HOPS", "0"))
+if trusted_proxy_hops < 0:
+    raise RuntimeError("TRUSTED_PROXY_HOPS must be zero or a positive integer.")
+if trusted_proxy_hops:
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app,
+        x_for=trusted_proxy_hops,
+        x_proto=trusted_proxy_hops,
+        x_host=trusted_proxy_hops,
+    )
+
+
+@app.before_request
+def protect_admin_mutations():
+    if not request.path.startswith("/api/admin/") or request.method in {
+        "GET", "HEAD", "OPTIONS",
+    }:
+        return None
+    origin = request.headers.get("Origin", "")
+    if (
+        not origin
+        or origin == "null"
+        or origin.rstrip("/") != f"{request.scheme}://{request.host}".rstrip("/")
+    ):
+        return jsonify({"error": "Admin requests must come from this website."}), 403
+    try:
+        parsed_origin = urlsplit(origin)
+    except ValueError:
+        return jsonify({"error": "Admin requests must come from this website."}), 403
+    if (
+        parsed_origin.scheme not in {"http", "https"}
+        or not parsed_origin.netloc
+        or parsed_origin.path
+        or parsed_origin.query
+        or parsed_origin.fragment
+    ):
+        return jsonify({"error": "Admin requests must come from this website."}), 403
+    if request.path == "/api/admin/login":
+        return None
+    expected_token = session.get("admin_csrf_token", "")
+    supplied_token = request.headers.get("X-CSRF-Token", "")
+    if (
+        not session.get("booking_admin")
+        or not expected_token
+        or not supplied_token
+        or not hmac.compare_digest(expected_token, supplied_token)
+    ):
+        return jsonify({"error": "The admin session expired. Sign in again."}), 401
+    return None
+
+
+@app.after_request
+def add_security_headers(response):
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault(
+        "Permissions-Policy", "camera=(), microphone=(), geolocation=()"
+    )
+    if request.path.startswith("/api/admin/") or request.path == "/admin.html":
+        response.headers["Cache-Control"] = "no-store"
+    if request.is_secure:
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+        )
+    return response
 
 BOOKING_DATABASE = BASE / "backend" / "instance" / "bookings.sqlite3"
 BOOKING_UPLOADS = BASE / "backend" / "instance" / "booking-forms"
@@ -1068,7 +1139,13 @@ def create_booking():
 
 @app.get("/api/admin/session")
 def get_admin_session():
-    return jsonify({"authenticated": bool(session.get("booking_admin"))})
+    authenticated = bool(session.get("booking_admin"))
+    response = jsonify({
+        "authenticated": authenticated,
+        "csrfToken": session.get("admin_csrf_token") if authenticated else None,
+    })
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.post("/api/admin/login")
@@ -1082,8 +1159,14 @@ def admin_login():
     submitted = payload.get("password", "")
     if not isinstance(submitted, str) or not hmac.compare_digest(submitted, password):
         return jsonify({"error": "The password is incorrect."}), 401
+    session.clear()
+    session.permanent = True
     session["booking_admin"] = True
-    return jsonify({"authenticated": True})
+    session["admin_csrf_token"] = secrets.token_urlsafe(32)
+    return jsonify({
+        "authenticated": True,
+        "csrfToken": session["admin_csrf_token"],
+    })
 
 
 @app.post("/api/admin/logout")
@@ -1847,6 +1930,8 @@ def serve_home():
 
 @app.get("/<path:asset_path>")
 def serve_frontend(asset_path):
+    if asset_path == "admin.html":
+        session.clear()
     return send_from_directory(BASE / "frontend", asset_path)
 
 

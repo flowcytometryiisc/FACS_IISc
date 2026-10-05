@@ -95,13 +95,24 @@ python app.py
 Open `http://127.0.0.1:5000/booking.html` to book a session and
 `http://127.0.0.1:5000/admin.html` to manage bookings. Set `BOOKING_ADMIN_PASSWORD`
 on the server before using the admin portal. For a deployed HTTPS site, set
-`BOOKING_COOKIE_SECURE=true` and persist both the Flask `instance` directory
+`APP_ENV=production` (which enables secure cookies), or set
+`BOOKING_COOKIE_SECURE=true`, and persist both the Flask `instance` directory
 (booking database and uploaded forms) and the session secret across restarts.
 Configure `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `SMTP_FROM_EMAIL`
 to send mail; configure `ADMIN_NOTIFICATION_EMAIL` for new-request alerts.
 Optional settings are `SMTP_PORT` (defaults to 587) and `SMTP_USE_SSL`.
 Without working mail configuration, bookings are still saved, but the API and
 portal report that delivery failed instead of claiming that mail was sent.
+The API is same-origin only. Admin changes require a same-origin `Origin` header
+and a session-bound CSRF token. Admin sessions are `HttpOnly`, `SameSite=Strict`,
+expire after 15 minutes without sliding renewal, and are cleared when the admin
+page is opened, when the user signs out, after inactivity, and when the page is
+left. Serve the frontend through this application or a same-origin reverse
+proxy; opening HTML files directly with `file://` is not supported. In production,
+terminate HTTPS at a trusted proxy that forwards the original host and scheme,
+set `TRUSTED_PROXY_HOPS` to the exact number of trusted proxy hops (otherwise
+serve HTTPS directly), and set a unique persistent `FLASK_SECRET_KEY`. Never
+expose the application server directly when trusting forwarded headers.
 For Supabase-backed hosting, follow [SUPABASE_SETUP.md](./SUPABASE_SETUP.md);
 the server uses Supabase PostgreSQL and a private Storage bucket when
 `DATABASE_URL` is configured, and retains SQLite for local development.

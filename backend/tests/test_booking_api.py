@@ -40,6 +40,8 @@ class BookingApiTests(unittest.TestCase):
         self.password_patch.start()
         facility_app.app.config.update(TESTING=True)
         self.client = facility_app.app.test_client()
+        self.client.environ_base["HTTP_ORIGIN"] = "http://localhost"
+        self.csrf_token = ""
         slot_date = facility_app.facility_today() + timedelta(days=1)
         while slot_date.weekday() >= 5:
             slot_date += timedelta(days=1)
@@ -79,10 +81,16 @@ class BookingApiTests(unittest.TestCase):
         }
 
     def sign_in(self):
-        return self.client.post(
+        response = self.client.post(
             "/api/admin/login",
             json={"password": "test-admin-password"},
         )
+        if response.status_code == 200:
+            self.csrf_token = response.get_json()["csrfToken"]
+        return response
+
+    def admin_headers(self):
+        return {"X-CSRF-Token": self.csrf_token}
 
     def test_booking_reserves_slot_and_admin_can_cancel_and_restore(self):
         created = self.client.post("/api/bookings", data=self.booking_data())
@@ -132,7 +140,9 @@ class BookingApiTests(unittest.TestCase):
             facility_app, "send_booking_email", return_value={"sent": True, "error": None}
         ) as send_email:
             accepted = self.client.patch(
-                f"/api/admin/bookings/{booking['id']}", json={"status": "confirmed"}
+                f"/api/admin/bookings/{booking['id']}",
+                json={"status": "confirmed"},
+                headers=self.admin_headers(),
             )
         self.assertEqual(accepted.status_code, 200)
         self.assertEqual(accepted.get_json()["booking"]["status"], "confirmed")
@@ -140,7 +150,9 @@ class BookingApiTests(unittest.TestCase):
         send_email.assert_called_once()
 
         cancelled = self.client.patch(
-            f"/api/admin/bookings/{booking['id']}", json={"status": "cancelled"}
+            f"/api/admin/bookings/{booking['id']}",
+            json={"status": "cancelled"},
+            headers=self.admin_headers(),
         )
         self.assertEqual(cancelled.get_json()["booking"]["status"], "cancelled")
         self.assertEqual(
@@ -152,22 +164,32 @@ class BookingApiTests(unittest.TestCase):
         replacement = self.client.post("/api/bookings", data=self.booking_data())
         self.assertEqual(replacement.status_code, 201)
         conflict = self.client.patch(
-            f"/api/admin/bookings/{booking['id']}", json={"status": "confirmed"}
+            f"/api/admin/bookings/{booking['id']}",
+            json={"status": "confirmed"},
+            headers=self.admin_headers(),
         )
         self.assertEqual(conflict.status_code, 409)
         self.assertEqual(self.client.get("/api/admin/bookings").status_code, 200)
-        self.assertEqual(self.client.post("/api/admin/logout").status_code, 200)
+        self.assertEqual(
+            self.client.post(
+                "/api/admin/logout", headers=self.admin_headers()
+            ).status_code,
+            200,
+        )
         self.assertEqual(self.client.get("/api/admin/bookings").status_code, 401)
         self.sign_in()
         self.client.patch(
             f"/api/admin/bookings/{replacement.get_json()['id']}",
             json={"status": "cancelled"},
+            headers=self.admin_headers(),
         )
         with patch.object(
             facility_app, "send_booking_email", return_value={"sent": False, "error": "SMTP unavailable"}
         ):
             restored = self.client.patch(
-                f"/api/admin/bookings/{booking['id']}", json={"status": "confirmed"}
+                f"/api/admin/bookings/{booking['id']}",
+                json={"status": "confirmed"},
+                headers=self.admin_headers(),
             )
         self.assertEqual(restored.get_json()["booking"]["status"], "confirmed")
 
@@ -441,6 +463,7 @@ class BookingApiTests(unittest.TestCase):
         updated = self.client.put(
             f"/api/admin/bookings/{booking_id}/slots",
             json={"slots": [replacement_slot]},
+            headers=self.admin_headers(),
         )
         self.assertEqual(updated.status_code, 200)
         self.assertEqual(updated.get_json()["booking"]["slots"][0]["date"], replacement_slot["date"])
@@ -468,7 +491,11 @@ class BookingApiTests(unittest.TestCase):
         with patch.object(
             facility_app, "send_booking_email", return_value={"sent": True, "error": None}
         ):
-            created = self.client.post("/api/admin/bookings", json=values)
+            created = self.client.post(
+                "/api/admin/bookings",
+                json=values,
+                headers=self.admin_headers(),
+            )
         self.assertEqual(created.status_code, 201)
         booking = created.get_json()["booking"]
         self.assertEqual(booking["status"], "confirmed")
@@ -485,7 +512,9 @@ class BookingApiTests(unittest.TestCase):
             "slots": [{**self.slot, "date": new_date.isoformat()}],
         })
         updated = self.client.put(
-            f"/api/admin/bookings/{booking['id']}", json=values
+            f"/api/admin/bookings/{booking['id']}",
+            json=values,
+            headers=self.admin_headers(),
         )
         self.assertEqual(updated.status_code, 200)
         self.assertEqual(updated.get_json()["booking"]["userName"], "Updated Staff Booking")
@@ -508,6 +537,7 @@ class BookingApiTests(unittest.TestCase):
             updated = self.client.put(
                 f"/api/admin/bookings/{booking_id}/slots",
                 json={"slots": [self.slot]},
+                headers=self.admin_headers(),
             )
         self.assertEqual(updated.status_code, 409)
         self.assertIn("Brown Bear", updated.get_json()["error"])
@@ -530,7 +560,10 @@ class BookingApiTests(unittest.TestCase):
             401,
         )
         self.sign_in()
-        deleted = self.client.delete(f"/api/admin/bookings/{booking_id}")
+        deleted = self.client.delete(
+            f"/api/admin/bookings/{booking_id}",
+            headers=self.admin_headers(),
+        )
         self.assertEqual(deleted.status_code, 200)
         self.assertEqual(deleted.get_json(), {"deleted": True, "formDeleted": True})
         self.assertFalse(form_path.exists())
@@ -814,6 +847,80 @@ class BookingApiTests(unittest.TestCase):
         response = self.client.post("/api/admin/login", json={"password": "wrong"})
         self.assertEqual(response.status_code, 401)
         self.assertEqual(self.client.get("/api/admin/bookings").status_code, 401)
+
+    def test_admin_login_rejects_cross_origin_requests(self):
+        response = self.client.post(
+            "/api/admin/login",
+            json={"password": "test-admin-password"},
+            headers={"Origin": "https://attacker.example"},
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            self.client.get("/api/admin/bookings").status_code,
+            401,
+        )
+
+    def test_admin_mutations_require_csrf_token_and_same_origin(self):
+        created = self.client.post("/api/bookings", data=self.booking_data())
+        booking_id = created.get_json()["id"]
+        self.sign_in()
+        url = f"/api/admin/bookings/{booking_id}"
+        no_token = self.client.patch(url, json={"status": "cancelled"})
+        self.assertEqual(no_token.status_code, 401)
+
+        wrong_origin = self.client.patch(
+            url,
+            json={"status": "cancelled"},
+            headers={
+                **self.admin_headers(),
+                "Origin": "https://attacker.example",
+            },
+        )
+        self.assertEqual(wrong_origin.status_code, 403)
+
+        accepted = self.client.patch(
+            url,
+            json={"status": "cancelled"},
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(accepted.status_code, 200)
+        self.assertEqual(accepted.get_json()["booking"]["status"], "cancelled")
+
+    def test_admin_page_entry_requires_a_new_login(self):
+        login = self.sign_in()
+        self.assertTrue(login.get_json()["csrfToken"])
+        session_cookie = login.headers["Set-Cookie"]
+        self.assertIn("HttpOnly", session_cookie)
+        self.assertIn("SameSite=Strict", session_cookie)
+        self.assertEqual(
+            self.client.get("/api/admin/session").headers["Cache-Control"],
+            "no-store",
+        )
+        self.assertEqual(
+            self.client.get("/api/admin/session").get_json()["authenticated"],
+            True,
+        )
+
+        page = self.client.get("/admin.html")
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(page.headers["Cache-Control"], "no-store")
+        page.close()
+        session_status = self.client.get("/api/admin/session")
+        self.assertFalse(session_status.get_json()["authenticated"])
+        self.assertEqual(
+            self.client.get("/api/admin/bookings").status_code,
+            401,
+        )
+
+    def test_security_headers_are_present_and_cors_is_not_wildcarded(self):
+        response = self.client.get("/api/health")
+        self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(response.headers["X-Frame-Options"], "DENY")
+        self.assertEqual(
+            response.headers["Referrer-Policy"],
+            "strict-origin-when-cross-origin",
+        )
+        self.assertNotIn("Access-Control-Allow-Origin", response.headers)
 
     def test_live_calendar_maps_brown_bear_categories_to_instrument_colors(self):
         calendar_html = b"""

@@ -1,7 +1,7 @@
 const bookingPortal = document.querySelector("[data-booking-portal]");
 
 if (bookingPortal) {
-  const apiBase = window.location.protocol === "file:" ? "http://127.0.0.1:5000/api" : "/api";
+  const apiBase = "/api";
   const instrumentList = bookingPortal.querySelector("#booking-instruments");
   const dateList = bookingPortal.querySelector("#booking-dates");
   const slotList = bookingPortal.querySelector("#booking-slots");

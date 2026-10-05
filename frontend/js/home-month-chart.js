@@ -1,7 +1,7 @@
 const homeMonthOverview = document.querySelector("[data-home-month-overview]");
 
 if (homeMonthOverview) {
-  const apiBase = window.location.protocol === "file:" ? "http://127.0.0.1:5000/api" : "/api";
+  const apiBase = "/api";
   const monthLabel = homeMonthOverview.querySelector("#home-month-label");
   const daysContainer = homeMonthOverview.querySelector("#home-month-days");
   const metricsContainer = homeMonthOverview.querySelector("#home-month-metrics");

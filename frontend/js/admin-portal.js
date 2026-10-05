@@ -1,7 +1,7 @@
 const adminPortal = document.querySelector("[data-admin-portal]");
 
 if (adminPortal) {
-  const apiBase = window.location.protocol === "file:" ? "http://127.0.0.1:5000/api" : "/api";
+  const apiBase = "/api";
   const loginPanel = adminPortal.querySelector("#admin-login-panel");
   const dashboard = adminPortal.querySelector("#admin-dashboard");
   const loginForm = adminPortal.querySelector("#admin-login-form");
@@ -30,6 +30,9 @@ if (adminPortal) {
   let calendarFetchedAt = "";
   let selectedCalendarDate = "";
   let calendarRequestId = 0;
+  let csrfToken = "";
+  let inactivityTimer = 0;
+  const inactivityTimeoutMs = 15 * 60 * 1000;
 
   function escapeHTML(value) {
     return String(value ?? "").replace(/[&<>"']/g, character => ({
@@ -56,10 +59,54 @@ if (adminPortal) {
   }
 
   async function fetchJSON(url, options = {}) {
-    const response = await fetch(url, options);
+    const method = (options.method || "GET").toUpperCase();
+    const isAdminMutation = url.includes(`${apiBase}/admin/`)
+      && !["GET", "HEAD", "OPTIONS"].includes(method)
+      && !url.endsWith("/admin/login");
+    const headers = new Headers(options.headers || {});
+    if (isAdminMutation) {
+      if (!csrfToken) throw new Error("Your staff session expired. Sign in again.");
+      headers.set("X-CSRF-Token", csrfToken);
+    }
+    const response = await fetch(url, {
+      ...options,
+      headers,
+      credentials: "same-origin",
+    });
     const payload = await response.json();
+    if (response.status === 401 && csrfToken && isAdminMutation) {
+      csrfToken = "";
+      clearTimeout(inactivityTimer);
+      bookings = [];
+      showDashboard(false);
+      loginStatus.textContent = "Your staff session expired. Sign in again.";
+    }
     if (!response.ok) throw new Error(payload.error || "The admin request could not be completed.");
     return payload;
+  }
+
+  function scheduleInactivityLogout() {
+    clearTimeout(inactivityTimer);
+    if (!csrfToken) return;
+    inactivityTimer = window.setTimeout(() => {
+      void logoutAdmin("You were signed out after 15 minutes of inactivity.");
+    }, inactivityTimeoutMs);
+  }
+
+  async function logoutAdmin(message) {
+    if (!csrfToken) return;
+    try {
+      await fetchJSON(`${apiBase}/admin/logout`, { method: "POST" });
+      csrfToken = "";
+      clearTimeout(inactivityTimer);
+      bookings = [];
+      renderStats();
+      renderBookings();
+      showDashboard(false);
+      loginStatus.textContent = message;
+    } catch (error) {
+      dashboardStatus.textContent = error.message;
+    }
   }
 
   function showDashboard(authenticated) {
@@ -268,10 +315,16 @@ if (adminPortal) {
   async function checkSession() {
     try {
       const payload = await fetchJSON(`${apiBase}/admin/session`, { cache: "no-store" });
-      showDashboard(payload.authenticated);
-      if (payload.authenticated) await loadDashboard();
+      if (payload.authenticated && payload.csrfToken) {
+        csrfToken = payload.csrfToken;
+        await fetchJSON(`${apiBase}/admin/logout`, { method: "POST" });
+      }
+      csrfToken = "";
+      showDashboard(false);
+      loginStatus.textContent = "Sign in to start a new staff session.";
     } catch (error) {
       loginStatus.textContent = error.message;
+      showDashboard(false);
     }
   }
 
@@ -281,13 +334,16 @@ if (adminPortal) {
     const submitButton = loginForm.querySelector('[type="submit"]');
     submitButton.disabled = true;
     try {
-      await fetchJSON(`${apiBase}/admin/login`, {
+      const payload = await fetchJSON(`${apiBase}/admin/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: loginForm.elements.password.value }),
       });
+      csrfToken = payload.csrfToken || "";
+      if (!csrfToken) throw new Error("A secure staff session could not be started. Contact the administrator.");
       loginForm.reset();
       showDashboard(true);
+      scheduleInactivityLogout();
       await loadDashboard();
     } catch (error) {
       loginStatus.textContent = error.message;
@@ -297,14 +353,23 @@ if (adminPortal) {
   });
 
   adminPortal.querySelector("#admin-logout").addEventListener("click", async () => {
-    try {
-      await fetchJSON(`${apiBase}/admin/logout`, { method: "POST" });
-      bookings = [];
-      showDashboard(false);
-      loginStatus.textContent = "You have been signed out.";
-    } catch (error) {
-      dashboardStatus.textContent = error.message;
-    }
+    await logoutAdmin("You have been signed out.");
+  });
+
+  for (const eventName of ["pointerdown", "keydown", "touchstart", "click"]) {
+    window.addEventListener(eventName, scheduleInactivityLogout, { passive: true });
+  }
+  window.addEventListener("pagehide", () => {
+    if (!csrfToken) return;
+    const headers = new Headers({ "X-CSRF-Token": csrfToken });
+    void fetch(`${apiBase}/admin/logout`, {
+      method: "POST",
+      headers,
+      credentials: "same-origin",
+      keepalive: true,
+    }).catch(() => {});
+    csrfToken = "";
+    clearTimeout(inactivityTimer);
   });
 
   adminPortal.querySelector("#admin-refresh").addEventListener("click", () => {
