@@ -41,7 +41,11 @@ BOOKING_SLOTS_BY_TYPE = {
     "Analyzer": BOOKING_SLOTS,
     "Sorter": BOOKING_SLOTS,
 }
-SORTER_CLEANING_NEXT = dict(zip(BOOKING_SLOTS, BOOKING_SLOTS[1:]))
+SORTER_CLEANING_NEXT = {
+    current: following
+    for current, following in zip(BOOKING_SLOTS, BOOKING_SLOTS[1:])
+    if current.split("-", 1)[1] == following.split("-", 1)[0]
+}
 MAX_CONCURRENT_INSTRUMENTS = 2
 BOOKING_WEEKDAYS = {0, 1, 2, 3, 4}
 SPECIMEN_TYPES = (
@@ -448,11 +452,17 @@ def slot_identity(slot):
 
 
 def sorter_cleaning_slots(slots, instruments):
+    occupied = {slot_identity(slot) for slot in slots}
     cleaning = set()
     for slot in slots:
         instrument = instruments.get(slot["instrument"])
         next_time = SORTER_CLEANING_NEXT.get(slot["time"])
-        if instrument and instrument.get("type") == "Sorter" and next_time:
+        if (
+            instrument
+            and instrument.get("type") == "Sorter"
+            and next_time
+            and (slot["instrument"], slot["date"], next_time) not in occupied
+        ):
             cleaning.add((slot["instrument"], slot["date"], next_time))
     return cleaning
 
@@ -464,9 +474,9 @@ def booking_conflict(candidate_slots, occupied_slots, instruments):
         return "One or more selected sessions are already booked. Refresh availability."
 
     occupied_cleaning = sorter_cleaning_slots(occupied_slots, instruments)
-    candidate_cleaning = sorter_cleaning_slots(candidate_slots, instruments)
-    if candidate_keys & (occupied_cleaning | candidate_cleaning):
+    if candidate_keys & occupied_cleaning:
         return "That sorter slot is blocked for cleaning after the preceding session."
+    candidate_cleaning = sorter_cleaning_slots(candidate_slots, instruments)
     if candidate_cleaning & (occupied_keys | candidate_keys):
         return "A selected sorter session would overlap a booked slot needed for cleaning."
 

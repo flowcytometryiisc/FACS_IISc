@@ -18,7 +18,10 @@ if (bookingPortal) {
   const dates = [];
   const instruments = [];
   const timeSlots = ["10:00-11:00", "11:00-12:00", "12:00-13:00", "14:00-15:00", "15:00-16:00", "16:00-17:00"];
-  const sorterCleaningNext = new Map(timeSlots.map((time, index) => [time, timeSlots[index + 1]]).filter(([, next]) => next));
+  const sorterCleaningNext = new Map(timeSlots.flatMap((time, index) => {
+    const next = timeSlots[index + 1];
+    return next && time.split("-")[1] === next.split("-")[0] ? [[time, next]] : [];
+  }));
   const selectedInstruments = new Set();
   const selectedSlots = new Map();
   let selectedDate = "";
@@ -114,19 +117,13 @@ if (bookingPortal) {
         const key = slotKey(slot);
         const selected = selectedSlots.has(key);
         const existingBooking = bookedSlots.get(key);
-        const booked = Boolean(existingBooking);
+        const booked = Boolean(existingBooking && existingBooking.source !== "cleaning");
         const unavailableReason = unavailableSlots.get(`${selectedDate}|${time}`);
         const selectedCleaning = instrument.type === "Sorter"
           && [...selectedSlots.values()].some(item =>
             item.instrument === instrument.name
             && item.date === selectedDate
             && sorterCleaningNext.get(item.time) === time
-          );
-        const conflictsWithNextSelection = instrument.type === "Sorter"
-          && [...selectedSlots.values()].some(item =>
-            item.instrument === instrument.name
-            && item.date === selectedDate
-            && sorterCleaningNext.get(time) === item.time
           );
         const operatorBookings = new Set([
           ...[...bookedSlots.values()]
@@ -138,7 +135,8 @@ if (bookingPortal) {
         ]);
         const operatorLimit = !selected && !operatorBookings.has(instrument.name)
           && (operatorBookings.size >= 2 || unavailableReason === "operator_limit");
-        const cleaning = existingBooking?.source === "cleaning" || selectedCleaning || conflictsWithNextSelection;
+        const cleaning = existingBooking?.source === "cleaning";
+        const selectableCleaning = selectedCleaning && !cleaning && !selected;
         const unavailable = Boolean(unavailableReason) || operatorLimit;
         const status = cleaning
           ? "Blocked for cleaning"
@@ -146,6 +144,8 @@ if (bookingPortal) {
             ? existingBooking.source === "calendar" ? "Booked · Facility calendar" : "Booked · Portal"
             : selected
               ? "Selected"
+              : selectableCleaning
+                ? "Continue sorter booking"
               : operatorLimit
                 ? "Operator limit reached"
                 : unavailableReason === "started"
@@ -170,7 +170,6 @@ if (bookingPortal) {
           return;
         } else {
           const [instrument, date, time] = key.split("|");
-          const instrumentRecord = instruments.find(item => item.name === instrument);
           const concurrent = new Set([
             ...[...bookedSlots.values()]
               .filter(item => item.date === date && item.time === time && item.source !== "cleaning")
@@ -181,11 +180,6 @@ if (bookingPortal) {
           ]);
           if (concurrent.size >= 2 && !concurrent.has(instrument)) {
             availabilityStatus.textContent = "Only two instruments can be booked during the same time slot.";
-            return;
-          }
-          const nextSorterSlot = instrumentRecord?.type === "Sorter" && sorterCleaningNext.get(time);
-          if (nextSorterSlot && selectedSlots.has(slotKey({ instrument, date, time: nextSorterSlot }))) {
-            availabilityStatus.textContent = "This sorter session would block the next selected slot for cleaning.";
             return;
           }
           selectedSlots.set(key, { instrument, date, time });

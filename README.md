@@ -45,8 +45,9 @@ visible, on return to the page, and immediately before submission. Confirmed
 portal bookings appear on the website calendar and homepage overview. Brown
 Bear remains managed separately: this site has no write access to that external
 calendar, so website bookings are not written back to Brown Bear.
-Sessions run hourly from 10:00 AM to 1:00 PM and 2:00 PM to 5:00 PM. A sorter
-booking blocks its next session for cleaning, and no more than two instruments
+Sessions run hourly from 10:00 AM to 1:00 PM and 2:00 PM to 5:00 PM. Consecutive
+sorter sessions can be booked together; the next contiguous session after the
+last booked sorter session is blocked for cleaning. No more than two instruments
 can be booked for the same time slot across Brown Bear and portal bookings.
 The staff portal labels Brown Bear events as externally managed and links to
 Brown Bear's separate admin sign-in. Authorized staff can edit or delete those

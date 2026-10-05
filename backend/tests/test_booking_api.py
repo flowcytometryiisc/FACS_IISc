@@ -247,7 +247,7 @@ class BookingApiTests(unittest.TestCase):
         self.assertEqual(blocked.status_code, 409)
         self.assertIn("blocked for cleaning", blocked.get_json()["error"])
 
-    def test_adjacent_sorter_slots_cannot_be_selected_together(self):
+    def test_adjacent_sorter_slots_can_be_booked_with_cleaning_after_the_run(self):
         sorter = next(
             item["name"] for item in facility_app.load_json("instruments.json")
             if item["type"] == "Sorter"
@@ -258,8 +258,58 @@ class BookingApiTests(unittest.TestCase):
             {**self.slot, "instrument": sorter, "time": "11:00-12:00"},
         ])
         response = self.client.post("/api/bookings", data=data)
-        self.assertEqual(response.status_code, 409)
-        self.assertIn("cleaning", response.get_json()["error"])
+        self.assertEqual(response.status_code, 201, response.get_json())
+
+        availability = self.client.get(
+            f"/api/booking-availability?start={self.slot['date']}&end={self.slot['date']}"
+        ).get_json()
+        self.assertIn(
+            {
+                "instrument": sorter,
+                "date": self.slot["date"],
+                "time": "12:00-13:00",
+                "color": next(
+                    item["color"] for item in facility_app.load_json("instruments.json")
+                    if item["name"] == sorter
+                ),
+                "source": "cleaning",
+                "title": "Blocked for cleaning",
+            },
+            availability["booked"],
+        )
+        third_slot = {
+            **self.slot,
+            "instrument": sorter,
+            "time": "12:00-13:00",
+        }
+        blocked = self.client.post(
+            "/api/bookings", data=self.booking_data(third_slot)
+        )
+        self.assertEqual(blocked.status_code, 409)
+        self.assertIn("blocked for cleaning", blocked.get_json()["error"])
+
+    def test_sorter_cleaning_does_not_cross_the_lunch_gap(self):
+        sorter = next(
+            item["name"] for item in facility_app.load_json("instruments.json")
+            if item["type"] == "Sorter"
+        )
+        afternoon_slot = {
+            **self.slot,
+            "instrument": sorter,
+            "time": "14:00-15:00",
+        }
+        response = self.client.post(
+            "/api/bookings", data=self.booking_data(afternoon_slot)
+        )
+        self.assertEqual(response.status_code, 201, response.get_json())
+        availability = self.client.get(
+            f"/api/booking-availability?start={self.slot['date']}&end={self.slot['date']}"
+        ).get_json()
+        self.assertFalse(any(
+            slot["instrument"] == sorter and slot["time"] == "14:00-15:00"
+            and slot["source"] == "cleaning"
+            for slot in availability["booked"]
+        ))
 
     def test_live_calendar_bookings_block_overlapping_instrument_slots(self):
         event = {
