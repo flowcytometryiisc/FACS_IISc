@@ -7,6 +7,10 @@ if (adminPortal) {
   const loginForm = adminPortal.querySelector("#admin-login-form");
   const loginStatus = adminPortal.querySelector("#admin-login-status");
   const dashboardStatus = adminPortal.querySelector("#admin-dashboard-status");
+  const dashboardTitle = adminPortal.querySelector("#admin-dashboard-title");
+  const dashboardDescription = adminPortal.querySelector("#admin-dashboard-description");
+  const dashboardHomeButton = adminPortal.querySelector("#admin-dashboard-home");
+  const dashboardCards = adminPortal.querySelector(".admin-dashboard-cards");
   const dashboardViewButtons = [...adminPortal.querySelectorAll("[data-admin-view-button]")];
   const dashboardViewPanels = [...adminPortal.querySelectorAll("[data-admin-view-panel]")];
   const bookingList = adminPortal.querySelector("#admin-booking-list");
@@ -53,7 +57,32 @@ if (adminPortal) {
   let inactivityTimer = 0;
   const inactivityTimeoutMs = 15 * 60 * 1000;
 
+  function showDashboardHome() {
+    dashboardTitle.textContent = "Admin dashboard";
+    dashboardDescription.textContent = "Choose a workspace to manage the facility.";
+    dashboardHomeButton.hidden = true;
+    dashboardCards.hidden = false;
+    dashboardViewPanels.forEach(panel => {
+      panel.hidden = true;
+    });
+    dashboardViewButtons.forEach(button => {
+      button.classList.remove("active");
+      button.setAttribute("aria-pressed", "false");
+    });
+  }
+
   function selectDashboardView(viewName) {
+    const workspaces = {
+      bookings: ["Bookings", "Review requests, manage bookings, and sync the facility calendar."],
+      events: ["Events & workshops", "Publish facility announcements and manage calendar closures."],
+      statistics: ["Usage statistics", "Explore monthly facility activity and demand."],
+    };
+    const workspace = workspaces[viewName];
+    if (!workspace) return;
+    dashboardTitle.textContent = workspace[0];
+    dashboardDescription.textContent = workspace[1];
+    dashboardHomeButton.hidden = false;
+    dashboardCards.hidden = true;
     dashboardViewButtons.forEach(button => {
       const selected = button.dataset.adminViewButton === viewName;
       button.classList.toggle("active", selected);
@@ -70,6 +99,7 @@ if (adminPortal) {
   dashboardViewButtons.forEach(button => {
     button.addEventListener("click", () => selectDashboardView(button.dataset.adminViewButton));
   });
+  dashboardHomeButton.addEventListener("click", showDashboardHome);
   adminPortal.querySelector("#admin-create-event").addEventListener("click", () => {
     selectDashboardView("events");
     eventForm.elements.namedItem("title").focus();
@@ -205,7 +235,7 @@ if (adminPortal) {
   function showDashboard(authenticated) {
     loginPanel.hidden = authenticated;
     dashboard.hidden = !authenticated;
-    if (!authenticated) selectDashboardView("bookings");
+    showDashboardHome();
   }
 
   function renderStats() {

@@ -1399,6 +1399,9 @@ main section[id],main [id]{scroll-margin-top:28px}
 .admin-dashboard[hidden],.admin-login-panel[hidden]{display:none}
 .admin-dashboard-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:17px}
 .admin-dashboard-header p{margin:5px 0 0}
+.admin-dashboard-header-actions{display:flex;align-items:center;gap:8px}
+.admin-dashboard-header-actions>.btn{min-height:36px;border:1px solid #d6e2ec;background:#fff;color:#31516c;font-size:10px}
+.admin-dashboard-header-actions>[hidden],.admin-dashboard-cards[hidden]{display:none!important}
 .admin-dashboard-header .admin-logout{border:1px solid #d6e2ec;background:#fff;color:#31516c}
 .admin-dashboard-header .admin-logout:hover{background:#f2f7fb}
 .admin-dashboard-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 20px}
