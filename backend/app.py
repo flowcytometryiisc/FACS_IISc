@@ -625,6 +625,13 @@ def iisc_holiday_for_date(slot_date):
     )
 
 
+def exclude_iisc_holiday_events(events):
+    return [
+        event for event in events
+        if iisc_holiday_for_date(event["date"]) is None
+    ]
+
+
 def event_time_range(time_text):
     parts = re.split(r"\s*[-\u2012-\u2015\u2212]\s*", time_text.strip(), maxsplit=1)
     if len(parts) != 2:
@@ -762,7 +769,7 @@ def validate_booking_fields(payload):
     return fields, None
 
 
-def normalize_booking_slots(slots, instrument_records):
+def normalize_booking_slots(slots, instrument_records, allow_holiday_override=False):
     if not isinstance(slots, list) or not 1 <= len(slots) <= 12:
         return None, "Choose between 1 and 12 session slots."
     normalized = []
@@ -777,20 +784,26 @@ def normalize_booking_slots(slots, instrument_records):
             parsed_date = date.fromisoformat(slot_date)
         except (TypeError, ValueError):
             return None, "A selected session has an invalid date."
-        if str(parsed_date.year) not in iisc_holiday_calendar()["years"]:
+        if (
+            not allow_holiday_override
+            and str(parsed_date.year) not in iisc_holiday_calendar()["years"]
+        ):
             return None, (
                 f"The IISc holiday calendar for {parsed_date.year} is not available "
                 "yet. Please contact the facility before booking that year."
             )
         holiday = iisc_holiday_for_date(slot_date)
-        if holiday:
+        if holiday and not allow_holiday_override:
             return None, f"{holiday['name']} is an IISc holiday; booking is unavailable."
         if (
             instrument not in instrument_records
             or time not in BOOKING_SLOTS_BY_TYPE.get(
                 instrument_records[instrument]["type"], ()
             )
-            or parsed_date.weekday() not in BOOKING_WEEKDAYS
+            or (
+                parsed_date.weekday() not in BOOKING_WEEKDAYS
+                and not (allow_holiday_override and holiday)
+            )
             or parsed_date < facility_today()
             or parsed_date > facility_today() + timedelta(days=90)
         ):
@@ -873,7 +886,9 @@ def get_booking_availability():
         return jsonify({"error": "The requested date range must be within 31 days."}), 400
 
     try:
-        brown_bear_events = brown_bear_events_between(start_date, end_date)
+        brown_bear_events = exclude_iisc_holiday_events(
+            brown_bear_events_between(start_date, end_date)
+        )
     except BrownBearCalendarError as error:
         return jsonify({"error": str(error)}), 502
 
@@ -1081,7 +1096,9 @@ def create_booking():
     try:
         booking_start = min(date.fromisoformat(slot["date"]) for slot in normalized_slots)
         booking_end = max(date.fromisoformat(slot["date"]) for slot in normalized_slots)
-        calendar_events = brown_bear_events_between(booking_start, booking_end)
+        calendar_events = exclude_iisc_holiday_events(
+            brown_bear_events_between(booking_start, booking_end)
+        )
     except BrownBearCalendarError as error:
         return jsonify({"error": str(error)}), 502
     calendar_booked = brown_bear_booked_slots(
@@ -1274,7 +1291,7 @@ def get_admin_calendar():
     try:
         events = [
             {**event, "source": "calendar"}
-            for event in fetch_brown_bear_month(month)
+            for event in exclude_iisc_holiday_events(fetch_brown_bear_month(month))
             if event["date"].startswith(month)
         ]
     except BrownBearCalendarError as error:
@@ -1369,10 +1386,10 @@ def update_admin_booking(booking_id):
             if any(slot_has_started(item) for item in restoring_slots):
                 return jsonify({"error": "A past session cannot be restored."}), 409
             try:
-                calendar_events = brown_bear_events_between(
+                calendar_events = exclude_iisc_holiday_events(brown_bear_events_between(
                     min(date.fromisoformat(item["date"]) for item in restoring_slots),
                     max(date.fromisoformat(item["date"]) for item in restoring_slots),
-                )
+                ))
             except BrownBearCalendarError as error:
                 return jsonify({"error": str(error)}), 502
             calendar_booked = brown_bear_booked_slots(
@@ -1452,6 +1469,7 @@ def admin_booking_payload(payload):
     slots, error = normalize_booking_slots(
         payload.get("slots"),
         {item["name"]: item for item in load_json("instruments.json")},
+        allow_holiday_override=True,
     )
     if error:
         return None, None, error
@@ -1460,10 +1478,10 @@ def admin_booking_payload(payload):
 
 def get_calendar_conflicts(slots, instruments):
     try:
-        events = brown_bear_events_between(
+        events = exclude_iisc_holiday_events(brown_bear_events_between(
             min(date.fromisoformat(slot["date"]) for slot in slots),
             max(date.fromisoformat(slot["date"]) for slot in slots),
-        )
+        ))
     except BrownBearCalendarError as error:
         return None, None, str(error)
     booked = brown_bear_booked_slots(events, list(instruments.values()))
@@ -1650,7 +1668,10 @@ def update_admin_booking_slots(booking_id):
             or time not in BOOKING_SLOTS_BY_TYPE.get(
                 instrument_records[instrument]["type"], ()
             )
-            or parsed_date.weekday() not in BOOKING_WEEKDAYS
+            or (
+                parsed_date.weekday() not in BOOKING_WEEKDAYS
+                and not iisc_holiday_for_date(slot_date)
+            )
             or parsed_date < facility_today()
             or parsed_date > facility_today() + timedelta(days=90)
         ):
@@ -1670,10 +1691,10 @@ def update_admin_booking_slots(booking_id):
         normalized_slots.append(normalized)
 
     try:
-        calendar_events = brown_bear_events_between(
+        calendar_events = exclude_iisc_holiday_events(brown_bear_events_between(
             min(date.fromisoformat(slot["date"]) for slot in normalized_slots),
             max(date.fromisoformat(slot["date"]) for slot in normalized_slots),
-        )
+        ))
     except BrownBearCalendarError as error:
         return jsonify({"error": str(error)}), 502
     calendar_booked = brown_bear_booked_slots(
@@ -1951,7 +1972,7 @@ def get_calendar():
     try:
         events = [
             {**event, "source": "calendar"}
-            for event in fetch_brown_bear_month(month)
+            for event in exclude_iisc_holiday_events(fetch_brown_bear_month(month))
             if event["date"].startswith(month)
         ]
     except BrownBearCalendarError as error:

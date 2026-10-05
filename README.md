@@ -64,6 +64,10 @@ IISc's PDF is image-based rather than a machine-readable calendar feed, so the
 dates must be reviewed and updated from the next official IISc PDF each year.
 Bookings are disabled for years that do not yet have a verified holiday list;
 update the JSON when IISc publishes that year's regular-holidays list.
+IISc holiday dates are displayed separately from session entries; Brown Bear
+entries on those dates are omitted from this site's calendar and availability.
+Public bookings remain blocked. Authenticated facility staff can create or
+reschedule an emergency booking on a holiday through the admin portal.
 The staff portal labels Brown Bear events as externally managed and links to
 Brown Bear's separate admin sign-in. Authorized staff can edit or delete those
 legacy events there; website bookings can be rescheduled or deleted in this

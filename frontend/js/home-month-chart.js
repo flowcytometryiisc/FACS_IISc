@@ -68,7 +68,7 @@ if (homeMonthOverview) {
         source: "IISc Holiday",
         time: event.time || "All day",
         title: event.title,
-        color: event.color || "neutral",
+        color: "holiday",
       })),
       ...portalSlots.filter(slot => slot.date === date).map(slot => ({
         source: "Portal booking",
@@ -84,7 +84,8 @@ if (homeMonthOverview) {
     const month = visibleMonth.getMonth();
     const monthDays = monthDayNumbers(year, month);
     const dayCounts = monthDays.map(day =>
-      eventsForDate(`${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`).length
+      eventsForDate(`${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`)
+        .filter(event => event.source !== "IISc Holiday").length
     );
     const total = dayCounts.reduce((sum, count) => sum + count, 0);
     const busyDays = dayCounts.filter(count => count > 0).length;
@@ -136,17 +137,14 @@ if (homeMonthOverview) {
         day,
         date: value,
         live: brownBearEvents.filter(event => event.date === value).length,
+        holidays: holidayEvents.filter(event => event.date === value),
         byColor: [
           ...instruments.map(instrument => ({
             color: instrument.color,
             count: brownBearEvents.filter(event => event.date === value && event.instrument === instrument.name).length
               + portalSlots.filter(slot => slot.date === value && slot.instrument === instrument.name).length,
           })),
-          {
-            color: "neutral",
-            count: brownBearEvents.filter(event => event.date === value && !event.instrument).length
-              + holidayEvents.filter(event => event.date === value).length,
-          },
+          { color: "neutral", count: brownBearEvents.filter(event => event.date === value && !event.instrument).length },
         ].filter(item => item.count > 0),
         portal: portalSlots.filter(slot => slot.date === value).length,
       };
@@ -162,13 +160,14 @@ if (homeMonthOverview) {
       const total = item.live + item.portal;
       const selected = selectedDate === item.date;
       const isToday = localDateKey(today) === item.date;
-      const holidayCount = holidayEvents.filter(event => event.date === item.date).length;
-      const title = `${formatDate(item.date, { weekday: "long", day: "numeric", month: "long" })}: ${item.live} Brown Bear calendar entries, ${item.portal} portal bookings, ${holidayCount} IISc holidays`;
+      const holidayCount = item.holidays.length;
+      const holidayNames = item.holidays.map(event => event.title.replace(/^IISc Holiday · /, ""));
+      const title = `${formatDate(item.date, { weekday: "long", day: "numeric", month: "long" })}: ${item.live} Brown Bear calendar entries, ${item.portal} portal bookings${holidayCount ? `, IISc holiday: ${holidayNames.join(", ")}` : ""}`;
       const bars = item.byColor.map(group =>
         `<i data-instrument-color="${escapeHTML(group.color)}" style="height:${Math.max(9, Math.round(group.count / maximum * 46))}px"></i>`
       ).join("");
-      return `<button type="button" class="home-month-day${selected ? " selected" : ""}${isToday ? " today" : ""}" data-home-month-date="${item.date}" aria-pressed="${selected}" aria-label="${escapeHTML(title)}">
-        <span class="home-month-day-number">${day}</span><span class="home-month-bars" aria-hidden="true">${bars}</span><span class="home-month-count">${total ? `${total} ${total === 1 ? "entry" : "entries"}` : "—"}</span>
+      return `<button type="button" class="home-month-day${selected ? " selected" : ""}${isToday ? " today" : ""}${holidayCount ? " holiday" : ""}" data-home-month-date="${item.date}" aria-pressed="${selected}" aria-label="${escapeHTML(title)}">
+        <span class="home-month-day-number">${day}</span><span class="home-month-bars" aria-hidden="true">${bars}</span>${holidayCount ? `<span class="home-month-holiday-tag" title="${escapeHTML(holidayNames.join(", "))}">HOLIDAY</span>` : ""}<span class="home-month-count">${total ? `${total} ${total === 1 ? "entry" : "entries"}` : "—"}</span>
       </button>`;
     }));
     const trailingDays = (7 - (cells.length % 7)) % 7;
@@ -206,7 +205,7 @@ if (homeMonthOverview) {
     const colors = instruments.map(instrument =>
       `<span><i data-instrument-color="${escapeHTML(instrument.color)}"></i>${escapeHTML(instrument.name)}<small>${escapeHTML(instrument.colorCode || "")}</small></span>`
     );
-    legend.innerHTML = `<span><i data-instrument-color="neutral"></i>Unassigned</span>${colors.join("")}`;
+    legend.innerHTML = `<span><i data-instrument-color="neutral"></i>Unassigned</span>${colors.join("")}<span><i data-instrument-color="holiday"></i>IISc holiday</span>`;
   }
 
   async function loadMonth() {
