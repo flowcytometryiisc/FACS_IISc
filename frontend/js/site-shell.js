@@ -3,7 +3,6 @@ const sitePages = [
   { file: "about.html", label: "About", icon: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-8 9a8 8 0 0 1 16 0" },
   { file: "people.html", label: "People", icon: "M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-6 9a6 6 0 0 1 12 0m1-13a3 3 0 1 1 0 6m1 2a5 5 0 0 1 4 5" },
   { file: "instruments.html", label: "Instruments", icon: "M4 4h16v16H4zM8 8h8v8H8zM2 9h2m16 0h2M2 15h2m16 0h2M9 2v2m6-2v2m-6 16v2m6-2v2" },
-  { file: "services.html", label: "Services", icon: "M4 19h16M6 16l4-5 3 2 5-7m-3 0h3v3" },
   { file: "data-analysis.html", label: "Data Analysis", icon: "M4 19V5m0 14h17m-14-4 4-4 3 2 5-6" },
   { file: "resources.html", label: "Resources", icon: "M5 4h14v16H5zM8 8h8m-8 4h8m-8 4h5" },
   { file: "forms.html", label: "Forms", icon: "M6 3h8l4 4v14H6zM14 3v5h5m-9 4h6m-6 4h6" },
@@ -54,7 +53,7 @@ siteMain.insertAdjacentHTML("beforeend", `
     <div class="container footer-top">
       <a class="footer-brand" href="index.html"><span class="brand-logo">IISc</span><span><strong>Indian Institute of Science</strong><small>Bengaluru</small></span></a>
       <nav class="footer-links" aria-label="Footer navigation">
-        <a href="about.html">About</a><a href="people.html">People</a><a href="instruments.html">Instruments</a><a href="services.html">Services</a><a href="data-analysis.html">Data Analysis</a><a href="resources.html">Resources</a><a href="forms.html">Forms</a><a href="booking.html">Book a slot</a><a href="admin.html">Admin portal</a><a href="workshops.html">Workshops</a><a href="contact.html">Contact</a>
+        <a href="about.html">About</a><a href="people.html">People</a><a href="instruments.html">Instruments</a><a href="data-analysis.html">Data Analysis</a><a href="resources.html">Resources</a><a href="forms.html">Forms</a><a href="booking.html">Book a slot</a><a href="admin.html">Admin portal</a><a href="workshops.html">Workshops</a><a href="contact.html">Contact</a>
       </nav>
     </div>
     <div class="container footer-bottom"><span>© 2026 Divisional FACS Facility, IISc</span><a href="https://www.iisc.ac.in/" target="_blank" rel="noreferrer">Indian Institute of Science ↗</a></div>
