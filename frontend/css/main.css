@@ -483,16 +483,19 @@ footer{padding:10px 0 8px;background:#041f40;color:#c1d0e1}
 .quicklink-card small{margin-top:3px;color:#72869a;font-size:6px;line-height:1.45}
 .quicklink-card>b{margin-top:auto;padding-top:7px;color:#176fbd;font-size:7px}
 .home-spotlight{padding:23px 0;background:
-  radial-gradient(ellipse at 69% 30%,rgba(19,86,165,.39),transparent 45%),
-  linear-gradient(100deg,#031b36,#08274b 65%,#031b37);color:#fff}
+  radial-gradient(ellipse at 69% 30%,rgba(91,174,245,.2),transparent 45%),
+  linear-gradient(100deg,#edf6ff,#dceeff 65%,#eaf4ff);color:#173b5d}
 .spotlight-layout{display:grid;grid-template-columns:1fr .8fr;gap:30px;align-items:center}
-.spotlight-layout h2{margin:5px 0;color:#fff;font:800 19px/1.15 Manrope,Inter,sans-serif;letter-spacing:-.4px}
-.spotlight-layout p{max-width:420px;margin:0;color:#c3d4e5;font-size:8px;line-height:1.55}
+.spotlight-layout .eyebrow{color:#176fbd}
+.spotlight-layout h2{margin:5px 0;color:#12395c;font:800 19px/1.15 Manrope,Inter,sans-serif;letter-spacing:-.4px}
+.spotlight-layout p{max-width:420px;margin:0;color:#48647e;font-size:8px;line-height:1.55}
 .spotlight-layout .btn{margin-top:10px}
+.home-spotlight .btn.outline{border-color:#176fbd;background:#176fbd;color:#fff}
+.home-spotlight .btn.outline:hover{background:#0d589b}
 .spotlight-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:0}
-.spotlight-stats div{display:flex;min-height:48px;flex-direction:column;justify-content:center;padding-left:14px;border-left:1px solid rgba(203,227,247,.25)}
-.spotlight-stats strong{color:#bcdfff;font:800 20px Manrope,Inter,sans-serif}
-.spotlight-stats span{color:#ccdae8;font-size:7px}
+.spotlight-stats div{display:flex;min-height:48px;flex-direction:column;justify-content:center;padding-left:14px;border-left:1px solid rgba(23,111,189,.24)}
+.spotlight-stats strong{color:#176fbd;font:800 20px Manrope,Inter,sans-serif}
+.spotlight-stats span{color:#48647e;font-size:7px}
 .home-contact{display:flex;align-items:center;gap:11px;padding-top:17px;padding-bottom:17px}
 .contact-icon{display:grid;place-items:center;flex:none;width:30px;height:30px;border-radius:50%;background:#e4f0ff;color:#1676ce}
 .home-contact>div:nth-child(2){flex:1}
