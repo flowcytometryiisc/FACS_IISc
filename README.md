@@ -32,6 +32,9 @@ preview; the live schedule requires the backend to be running.
 - Password-protected booking dashboard with an interactive weekday month grid,
   selected-day agenda and instrument filter; staff can review, accept, decline,
   create, edit and delete website bookings, with secure form downloads
+- Admin-managed events and workshops with editable dates, descriptions, and
+  validated brochure or registration links; upcoming items appear in an
+  animated homepage hero ticker and on the Events & Workshop page
 - Supabase PostgreSQL and private Storage deployment path for durable hosted
   bookings, session conflict constraints, form files and audit history
 - Hover and focus elevation on cards and links
@@ -90,6 +93,7 @@ The Flask API exposes:
 - `GET /api/health`
 - `GET /api/instruments`
 - `GET /api/content`
+- `GET /api/events` (upcoming admin-managed events and workshops)
 - `GET /api/calendar?month=YYYY-MM` (Brown Bear schedule, website bookings, IISc holidays and staff closures)
 - `GET /api/booking-availability?start=YYYY-MM-DD&end=YYYY-MM-DD`
 - `POST /api/bookings` (multipart booking details and completed PDF form)
@@ -97,6 +101,8 @@ The Flask API exposes:
 - `GET /api/admin/bookings`, `GET /api/admin/calendar?month=YYYY-MM`
 - `GET /api/admin/calendar-closures`, `POST /api/admin/calendar-closures`
 - `DELETE /api/admin/calendar-closures/<id>`
+- `GET /api/admin/events`, `POST /api/admin/events`
+- `PUT /api/admin/events/<id>`, `DELETE /api/admin/events/<id>`
 - `POST /api/admin/bookings` (create a confirmed staff booking)
 - `PUT /api/admin/bookings/<id>` (edit booking details and sessions)
 - `PATCH /api/admin/bookings/<id>` (change booking status)

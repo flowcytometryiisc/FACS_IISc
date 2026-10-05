@@ -51,6 +51,25 @@
         </div>
         <div class="admin-closure-list-wrap"><h4>Upcoming closures</h4><div id="admin-closure-list" class="admin-closure-list"><p class="admin-status">Sign in to load calendar closures.</p></div></div>
       </section>
+      <section class="admin-event-manager booking-panel" aria-labelledby="admin-events-title">
+        <div class="admin-calendar-heading"><div><span class="eyebrow">PUBLIC ANNOUNCEMENTS</span><h3 id="admin-events-title">Events &amp; workshops</h3><p>Add upcoming workshops or facility events. Published items appear in the homepage hero ticker and on the Events &amp; Workshop page.</p></div></div>
+        <div class="admin-event-manager-layout">
+          <form id="admin-event-form" class="admin-event-form" novalidate>
+            <input type="hidden" name="eventId">
+            <h4 id="admin-event-form-title">Create an event</h4>
+            <label>Type<select name="category" required><option value="workshop">Workshop</option><option value="event">Facility event</option></select></label>
+            <label>Title<input name="title" maxlength="120" required placeholder="e.g. Introduction to Flow Cytometry"></label>
+            <div class="admin-event-date-fields"><label>Starts on<input type="date" name="startDate" required></label><label>Ends on<input type="date" name="endDate" required></label></div>
+            <label>Short announcement<input name="summary" maxlength="240" required placeholder="A concise summary for the homepage ticker"></label>
+            <label>Full details<textarea name="description" maxlength="2000" rows="4" required placeholder="Describe the programme, audience, registration or other details."></textarea></label>
+            <label>Link button text<input name="linkLabel" maxlength="80" required placeholder="View brochure"></label>
+            <label>Workshop or brochure URL<input name="linkUrl" maxlength="2048" required placeholder="https://… or /resources/brochure.pdf"><small>Use the workshop page, registration page or brochure link.</small></label>
+            <p class="admin-status" id="admin-event-form-status" role="status" aria-live="polite"></p>
+            <div class="admin-event-form-actions"><button class="btn primary" type="submit">Publish event</button><button class="btn outline" id="admin-event-cancel-edit" type="button" hidden>Cancel edit</button></div>
+          </form>
+          <div class="admin-event-list-wrap"><div class="admin-event-list-heading"><div><span class="eyebrow">CONTENT MANAGER</span><h4>Published &amp; past events</h4></div><button class="btn outline" id="admin-event-refresh" type="button">↻ Refresh</button></div><div id="admin-event-list" class="admin-event-list"><p class="admin-status">Sign in to load events.</p></div></div>
+        </div>
+      </section>
       <section class="admin-calendar-panel booking-panel" aria-labelledby="admin-calendar-title">
         <div class="admin-calendar-heading"><div><span class="eyebrow">MONTH AT A GLANCE</span><h3 id="admin-calendar-title">Facility calendar</h3><p>Select a weekday to review and manage that day. Brown Bear events are read-only here.</p></div><div class="admin-calendar-controls"><button class="btn outline" id="admin-calendar-previous" type="button" aria-label="Previous month">←</button><label class="visually-hidden" for="admin-calendar-month">Month</label><input id="admin-calendar-month" type="month"><button class="btn outline" id="admin-calendar-next" type="button" aria-label="Next month">→</button><button class="btn outline" id="admin-calendar-refresh" type="button">↻ Sync</button></div></div>
         <div class="admin-calendar-toolbar"><label for="admin-calendar-instrument">Show instrument</label><select id="admin-calendar-instrument"><option value="">All instruments</option></select><div class="admin-calendar-legend"><span><i class="brown-bear"></i>Brown Bear · managed externally</span><span><i class="portal"></i>Website booking · editable here</span></div></div>
@@ -87,16 +106,16 @@
     <div class="admin-edit-actions"><button class="btn outline" type="button" data-close-admin-edit>Cancel</button><button class="btn primary" type="submit">Save booking</button></div>
   </form>
 </dialog>
-<dialog class="admin-confirm-dialog" id="admin-closure-confirm" aria-labelledby="admin-closure-confirm-title" aria-describedby="admin-closure-confirm-description">
+<dialog class="admin-confirm-dialog" id="admin-item-confirm" aria-labelledby="admin-item-confirm-title" aria-describedby="admin-item-confirm-description">
   <div class="admin-confirm-icon" aria-hidden="true">!</div>
-  <span class="eyebrow">CALENDAR CLOSURE</span>
-  <h2 id="admin-closure-confirm-title">Remove this closure?</h2>
-  <p id="admin-closure-confirm-name" class="admin-confirm-name"></p>
-  <p id="admin-closure-confirm-description">Removing it may make the affected booking sessions available again.</p>
-  <p class="admin-confirm-status" id="admin-closure-confirm-status" role="status" aria-live="polite"></p>
+  <span class="eyebrow" id="admin-item-confirm-eyebrow">CALENDAR CLOSURE</span>
+  <h2 id="admin-item-confirm-title">Remove this closure?</h2>
+  <p id="admin-item-confirm-name" class="admin-confirm-name"></p>
+  <p id="admin-item-confirm-description">Removing it may make the affected booking sessions available again.</p>
+  <p class="admin-confirm-status" id="admin-item-confirm-status" role="status" aria-live="polite"></p>
   <div class="admin-confirm-actions">
-    <button class="btn outline" type="button" data-cancel-closure-removal>Keep closure</button>
-    <button class="admin-confirm-remove" type="button" id="admin-confirm-remove-closure">Remove closure</button>
+    <button class="btn outline" type="button" data-cancel-item-removal>Cancel</button>
+    <button class="admin-confirm-remove" type="button" id="admin-confirm-remove-item">Remove</button>
   </div>
 </dialog>
 <script src="js/site-shell.js"></script><script src="js/admin-portal.js"></script>

@@ -219,6 +219,21 @@ def booking_connection():
             created_at TEXT NOT NULL
         )
     """)
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS facility_events (
+            id TEXT PRIMARY KEY,
+            category TEXT NOT NULL CHECK (category IN ('workshop', 'event')),
+            title TEXT NOT NULL,
+            start_date TEXT NOT NULL,
+            end_date TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            description TEXT NOT NULL,
+            link_label TEXT NOT NULL,
+            link_url TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
     schema_row = connection.execute(
         "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'bookings'"
     ).fetchone()
@@ -648,6 +663,87 @@ def calendar_closures_between(connection, start_date, end_date):
         (end_date.isoformat(), start_date.isoformat()),
     ).fetchall()
     return [closure_row(row) for row in rows]
+
+
+def facility_event_row(row):
+    return {
+        "id": row["id"],
+        "category": row["category"],
+        "title": row["title"],
+        "startDate": row["start_date"],
+        "endDate": row["end_date"],
+        "summary": row["summary"],
+        "description": row["description"],
+        "linkLabel": row["link_label"],
+        "linkUrl": row["link_url"],
+        "createdAt": row["created_at"],
+        "updatedAt": row["updated_at"],
+    }
+
+
+def validate_facility_event(payload):
+    if not isinstance(payload, dict):
+        return None, "Submit the event details as a JSON object."
+    category = payload.get("category")
+    if category not in ("workshop", "event"):
+        return None, "Choose Workshop or Event as the event type."
+
+    text_fields = {
+        "title": (payload.get("title"), 120),
+        "summary": (payload.get("summary"), 240),
+        "description": (payload.get("description"), 2000),
+        "linkLabel": (payload.get("linkLabel"), 80),
+        "linkUrl": (payload.get("linkUrl"), 2048),
+    }
+    values = {}
+    for key, (value, maximum) in text_fields.items():
+        if not isinstance(value, str) or not value.strip() or len(value.strip()) > maximum:
+            return None, f"Enter {key} (no more than {maximum} characters)."
+        values[key] = value.strip()
+
+    start_text = payload.get("startDate")
+    end_text = payload.get("endDate") or start_text
+    try:
+        start_date = date.fromisoformat(start_text)
+        end_date = date.fromisoformat(end_text)
+        if start_date.isoformat() != start_text or end_date.isoformat() != end_text:
+            raise ValueError
+    except (TypeError, ValueError):
+        return None, "Provide valid event dates as YYYY-MM-DD."
+    if end_date < start_date or (end_date - start_date).days > 366:
+        return None, "The event date range must be inclusive and no longer than 367 days."
+
+    link_url = values["linkUrl"]
+    try:
+        parsed_link = urlsplit(link_url)
+    except ValueError:
+        return None, "Use a secure HTTPS, HTTP, or site-relative link."
+    if parsed_link.scheme:
+        if (
+            parsed_link.scheme not in ("http", "https")
+            or not parsed_link.netloc
+            or parsed_link.username
+            or parsed_link.password
+            or any(character.isspace() for character in link_url)
+        ):
+            return None, "Use a secure HTTPS, HTTP, or site-relative link."
+    elif (
+        not link_url.startswith("/")
+        or link_url.startswith("//")
+        or any(character.isspace() for character in link_url)
+    ):
+        return None, "Use a secure HTTPS, HTTP, or site-relative link."
+
+    return {
+        "category": category,
+        "title": values["title"],
+        "startDate": start_date.isoformat(),
+        "endDate": end_date.isoformat(),
+        "summary": values["summary"],
+        "description": values["description"],
+        "linkLabel": values["linkLabel"],
+        "linkUrl": link_url,
+    }, None
 
 
 def calendar_closure_events(closures, start_date, end_date):
@@ -1500,6 +1596,124 @@ def get_admin_calendar_closures():
     return response
 
 
+@app.get("/api/admin/events")
+def get_admin_events():
+    denied = require_admin()
+    if denied:
+        return denied
+    connection = booking_connection()
+    try:
+        rows = connection.execute(
+            "SELECT * FROM facility_events ORDER BY start_date, created_at DESC"
+        ).fetchall()
+    finally:
+        connection.close()
+    response = jsonify({"events": [facility_event_row(row) for row in rows]})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.post("/api/admin/events")
+def create_admin_event():
+    denied = require_admin()
+    if denied:
+        return denied
+    event, error = validate_facility_event(request.get_json(silent=True))
+    if error:
+        return jsonify({"error": error}), 400
+    now = datetime.now(timezone.utc).isoformat()
+    event_row = {
+        **event,
+        "id": f"EV-{secrets.token_hex(8).upper()}",
+        "createdAt": now,
+        "updatedAt": now,
+    }
+    connection = booking_connection()
+    try:
+        connection.execute(
+            """INSERT INTO facility_events
+               (id, category, title, start_date, end_date, summary, description,
+                link_label, link_url, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                event_row["id"],
+                event_row["category"],
+                event_row["title"],
+                event_row["startDate"],
+                event_row["endDate"],
+                event_row["summary"],
+                event_row["description"],
+                event_row["linkLabel"],
+                event_row["linkUrl"],
+                event_row["createdAt"],
+                event_row["updatedAt"],
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    return jsonify({"event": event_row}), 201
+
+
+@app.put("/api/admin/events/<event_id>")
+def update_admin_event(event_id):
+    denied = require_admin()
+    if denied:
+        return denied
+    event, error = validate_facility_event(request.get_json(silent=True))
+    if error:
+        return jsonify({"error": error}), 400
+    connection = booking_connection()
+    try:
+        cursor = connection.execute(
+            """UPDATE facility_events
+               SET category = ?, title = ?, start_date = ?, end_date = ?,
+                   summary = ?, description = ?, link_label = ?, link_url = ?,
+                   updated_at = ?
+               WHERE id = ?""",
+            (
+                event["category"],
+                event["title"],
+                event["startDate"],
+                event["endDate"],
+                event["summary"],
+                event["description"],
+                event["linkLabel"],
+                event["linkUrl"],
+                datetime.now(timezone.utc).isoformat(),
+                event_id,
+            ),
+        )
+        if cursor.rowcount == 0:
+            connection.rollback()
+            return jsonify({"error": "The event was not found."}), 404
+        connection.commit()
+        row = connection.execute(
+            "SELECT * FROM facility_events WHERE id = ?", (event_id,)
+        ).fetchone()
+    finally:
+        connection.close()
+    return jsonify({"event": facility_event_row(row)})
+
+
+@app.delete("/api/admin/events/<event_id>")
+def delete_admin_event(event_id):
+    denied = require_admin()
+    if denied:
+        return denied
+    connection = booking_connection()
+    try:
+        cursor = connection.execute(
+            "DELETE FROM facility_events WHERE id = ?", (event_id,)
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    if cursor.rowcount == 0:
+        return jsonify({"error": "The event was not found."}), 404
+    return jsonify({"deleted": True, "id": event_id})
+
+
 @app.post("/api/admin/calendar-closures")
 def create_admin_calendar_closure():
     denied = require_admin()
@@ -2193,6 +2407,23 @@ def get_instruments():
 @app.get("/api/content")
 def get_content():
     return jsonify(load_json("site-content.json"))
+
+
+@app.get("/api/events")
+def get_public_events():
+    today = facility_today().isoformat()
+    connection = booking_connection()
+    try:
+        rows = connection.execute(
+            """SELECT * FROM facility_events WHERE end_date >= ?
+               ORDER BY start_date, created_at DESC""",
+            (today,),
+        ).fetchall()
+    finally:
+        connection.close()
+    response = jsonify({"events": [facility_event_row(row) for row in rows]})
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.get("/api/calendar")

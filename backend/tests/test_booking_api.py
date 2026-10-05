@@ -1078,6 +1078,113 @@ class BookingApiTests(unittest.TestCase):
             ]
             self.assertEqual(len(closure_slots), len(facility_app.BOOKING_SLOTS))
 
+    def test_admin_events_are_editable_and_publicly_listed_until_their_end_date(self):
+        self.assertEqual(self.client.get("/api/admin/events").status_code, 401)
+        self.assertEqual(self.client.get("/api/events").get_json(), {"events": []})
+        self.sign_in()
+        event_payload = {
+            "category": "workshop",
+            "title": "Introduction to Flow Cytometry",
+            "startDate": self.slot["date"],
+            "endDate": self.slot["date"],
+            "summary": "A hands-on facility workshop.",
+            "description": "Learn cytometry fundamentals and instrument setup.",
+            "linkLabel": "View workshop brochure",
+            "linkUrl": "https://example.edu/workshops/flow-cytometry.pdf",
+        }
+        no_csrf = self.client.post("/api/admin/events", json=event_payload)
+        self.assertEqual(no_csrf.status_code, 401)
+
+        created = self.client.post(
+            "/api/admin/events",
+            json=event_payload,
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(created.status_code, 201)
+        event = created.get_json()["event"]
+        self.assertEqual(event["title"], event_payload["title"])
+        public_events = self.client.get("/api/events")
+        self.assertEqual(public_events.status_code, 200)
+        self.assertEqual(public_events.get_json()["events"], [event])
+
+        updated_payload = {
+            **event_payload,
+            "category": "event",
+            "summary": "Updated facility seminar announcement.",
+            "linkLabel": "Register",
+            "linkUrl": "/workshops.html#registration",
+        }
+        updated = self.client.put(
+            f"/api/admin/events/{event['id']}",
+            json=updated_payload,
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.get_json()["event"]["category"], "event")
+        self.assertEqual(
+            updated.get_json()["event"]["linkUrl"],
+            "/workshops.html#registration",
+        )
+        self.assertEqual(
+            self.client.get("/api/events").get_json()["events"][0]["summary"],
+            "Updated facility seminar announcement.",
+        )
+
+        rejected = self.client.post(
+            "/api/admin/events",
+            json={**event_payload, "linkUrl": "javascript:alert(1)"},
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(rejected.status_code, 400)
+        self.assertEqual(
+            self.client.put(
+                "/api/admin/events/missing-event",
+                json=event_payload,
+                headers=self.admin_headers(),
+            ).status_code,
+            404,
+        )
+
+        deleted = self.client.delete(
+            f"/api/admin/events/{event['id']}",
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(deleted.status_code, 200)
+        self.assertEqual(self.client.get("/api/events").get_json(), {"events": []})
+        self.assertEqual(
+            self.client.delete(
+                f"/api/admin/events/{event['id']}",
+                headers=self.admin_headers(),
+            ).status_code,
+            404,
+        )
+
+    def test_admin_events_hide_expired_items_from_public_pages(self):
+        self.sign_in()
+        yesterday = facility_app.facility_today() - timedelta(days=1)
+        event_payload = {
+            "category": "event",
+            "title": "Past seminar",
+            "startDate": yesterday.isoformat(),
+            "endDate": yesterday.isoformat(),
+            "summary": "This event is in the archive.",
+            "description": "Past event details.",
+            "linkLabel": "View notes",
+            "linkUrl": "https://example.edu/seminar",
+        }
+        self.assertEqual(
+            self.client.post(
+                "/api/admin/events",
+                json=event_payload,
+                headers=self.admin_headers(),
+            ).status_code,
+            201,
+        )
+        self.assertEqual(self.client.get("/api/events").get_json(), {"events": []})
+        admin_events = self.client.get("/api/admin/events").get_json()["events"]
+        self.assertEqual(len(admin_events), 1)
+        self.assertEqual(admin_events[0]["title"], "Past seminar")
+
     def test_admin_login_rejects_incorrect_password(self):
         response = self.client.post("/api/admin/login", json={"password": "wrong"})
         self.assertEqual(response.status_code, 401)

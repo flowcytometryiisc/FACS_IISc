@@ -12,15 +12,24 @@ if (adminPortal) {
   const statusFilter = adminPortal.querySelector("#admin-status-filter");
   const detailDialog = document.querySelector("#admin-booking-detail");
   const detailContent = document.querySelector("#admin-detail-content");
-  const closureConfirmDialog = document.querySelector("#admin-closure-confirm");
-  const closureConfirmName = document.querySelector("#admin-closure-confirm-name");
-  const closureConfirmStatus = document.querySelector("#admin-closure-confirm-status");
-  const closureConfirmButton = document.querySelector("#admin-confirm-remove-closure");
+  const itemConfirmDialog = document.querySelector("#admin-item-confirm");
+  const itemConfirmEyebrow = document.querySelector("#admin-item-confirm-eyebrow");
+  const itemConfirmTitle = document.querySelector("#admin-item-confirm-title");
+  const itemConfirmName = document.querySelector("#admin-item-confirm-name");
+  const itemConfirmDescription = document.querySelector("#admin-item-confirm-description");
+  const itemConfirmStatus = document.querySelector("#admin-item-confirm-status");
+  const itemConfirmButton = document.querySelector("#admin-confirm-remove-item");
+  const itemConfirmCancelButton = itemConfirmDialog.querySelector("[data-cancel-item-removal]");
   const calendarMonthInput = adminPortal.querySelector("#admin-calendar-month");
   const calendarStatus = adminPortal.querySelector("#admin-calendar-status");
   const calendarEvents = adminPortal.querySelector("#admin-calendar-events");
   const calendarInstrumentFilter = adminPortal.querySelector("#admin-calendar-instrument");
   const closureList = adminPortal.querySelector("#admin-closure-list");
+  const eventForm = adminPortal.querySelector("#admin-event-form");
+  const eventList = adminPortal.querySelector("#admin-event-list");
+  const eventFormStatus = adminPortal.querySelector("#admin-event-form-status");
+  const eventFormTitle = adminPortal.querySelector("#admin-event-form-title");
+  const eventCancelEditButton = adminPortal.querySelector("#admin-event-cancel-edit");
   const brownBearAdminLink = adminPortal.querySelector("#admin-brownbear-admin");
   const editDialog = document.querySelector("#admin-edit-booking");
   const editForm = document.querySelector("#admin-edit-form");
@@ -33,7 +42,8 @@ if (adminPortal) {
   let creatingBooking = false;
   let currentCalendarEvents = [];
   let calendarClosures = [];
-  let pendingClosureRemovalId = "";
+  let facilityEvents = [];
+  let pendingRemoval = null;
   let calendarFetchedAt = "";
   let selectedCalendarDate = "";
   let calendarRequestId = 0;
@@ -61,37 +71,55 @@ if (adminPortal) {
     }).join(" – ");
   }
 
-  function requestClosureRemoval(closureId) {
-    const closure = calendarClosures.find(item => item.id === closureId);
-    if (!closure) {
-      dashboardStatus.textContent = "This closure is no longer in the list. Refresh the calendar.";
+  function requestManagedItemRemoval(kind, id) {
+    const item = kind === "closure"
+      ? calendarClosures.find(closure => closure.id === id)
+      : facilityEvents.find(facilityEvent => facilityEvent.id === id);
+    if (!item) {
+      dashboardStatus.textContent = `This ${kind} is no longer in the list. Refresh and try again.`;
       return;
     }
-    const type = closure.type === "exception" ? "Exception holiday" : "Workshop holiday";
-    const dates = closure.startDate === closure.endDate
-      ? formatDate(closure.startDate)
-      : `${formatDate(closure.startDate)} – ${formatDate(closure.endDate)}`;
-    closureConfirmName.textContent = `${type} · ${dates} · ${closure.remark}`;
-    closureConfirmStatus.textContent = "";
-    pendingClosureRemovalId = closureId;
-    closureConfirmDialog.showModal();
+    const isClosure = kind === "closure";
+    const label = isClosure
+      ? item.type === "exception" ? "Exception holiday" : "Workshop holiday"
+      : item.category === "workshop" ? "Workshop" : "Facility event";
+    const dates = item.startDate === item.endDate
+      ? formatDate(item.startDate)
+      : `${formatDate(item.startDate)} – ${formatDate(item.endDate)}`;
+    itemConfirmEyebrow.textContent = isClosure ? "CALENDAR CLOSURE" : "EVENT CONTENT";
+    itemConfirmTitle.textContent = isClosure ? "Remove this closure?" : "Delete this event?";
+    itemConfirmName.textContent = `${label} · ${dates} · ${isClosure ? item.remark : item.title}`;
+    itemConfirmDescription.textContent = isClosure
+      ? "Removing it may make the affected booking sessions available again."
+      : "This event will be removed from the homepage ticker and the Events & Workshop page.";
+    itemConfirmCancelButton.textContent = isClosure ? "Keep closure" : "Keep event";
+    itemConfirmButton.textContent = isClosure ? "Remove closure" : "Delete event";
+    itemConfirmStatus.textContent = "";
+    pendingRemoval = { kind, id };
+    itemConfirmDialog.showModal();
   }
 
-  async function removeCalendarClosure() {
-    if (!pendingClosureRemovalId) return;
-    closureConfirmButton.disabled = true;
-    closureConfirmStatus.textContent = "Removing closure…";
+  async function removeManagedItem() {
+    if (!pendingRemoval) return;
+    const removal = pendingRemoval;
+    itemConfirmButton.disabled = true;
+    itemConfirmStatus.textContent = removal.kind === "closure" ? "Removing closure…" : "Deleting event…";
     try {
-      await fetchJSON(`${apiBase}/admin/calendar-closures/${encodeURIComponent(pendingClosureRemovalId)}`, {
+      const resource = removal.kind === "closure" ? "calendar-closures" : "events";
+      await fetchJSON(`${apiBase}/admin/${resource}/${encodeURIComponent(removal.id)}`, {
         method: "DELETE",
       });
-      pendingClosureRemovalId = "";
-      closureConfirmDialog.close();
-      await Promise.all([loadCalendarClosures(), loadFacilityCalendar()]);
+      pendingRemoval = null;
+      itemConfirmDialog.close();
+      if (removal.kind === "closure") {
+        await Promise.all([loadCalendarClosures(), loadFacilityCalendar()]);
+      } else {
+        await loadFacilityEvents();
+      }
     } catch (error) {
-      closureConfirmStatus.textContent = error.message;
+      itemConfirmStatus.textContent = error.message;
     } finally {
-      closureConfirmButton.disabled = false;
+      itemConfirmButton.disabled = false;
     }
   }
 
@@ -362,12 +390,140 @@ if (adminPortal) {
     renderCalendarClosures();
   }
 
+  function renderFacilityEvents() {
+    if (!facilityEvents.length) {
+      eventList.innerHTML = '<p class="admin-status">No events have been added yet.</p>';
+      return;
+    }
+    eventList.innerHTML = facilityEvents.map(item => {
+      const category = item.category === "workshop" ? "Workshop" : "Facility event";
+      const dates = item.startDate === item.endDate
+        ? formatDate(item.startDate)
+        : `${formatDate(item.startDate)} – ${formatDate(item.endDate)}`;
+      const status = item.endDate < facilityDateOffset() ? "Past" : "Upcoming";
+      return `<article class="admin-event-card ${escapeHTML(item.category)}">
+        <div class="admin-event-card-meta"><span>${escapeHTML(category)}</span><span>${escapeHTML(status)} · ${escapeHTML(dates)}</span></div>
+        <h5>${escapeHTML(item.title)}</h5>
+        <p>${escapeHTML(item.summary)}</p>
+        <div class="admin-event-card-link"><a href="${escapeHTML(item.linkUrl)}" target="_blank" rel="noopener noreferrer">${escapeHTML(item.linkLabel)} ↗</a></div>
+        <div class="admin-event-card-actions"><button class="admin-detail-button" type="button" data-event-edit="${escapeHTML(item.id)}">Edit details</button><button class="admin-delete-button" type="button" data-event-delete="${escapeHTML(item.id)}">Delete</button></div>
+      </article>`;
+    }).join("");
+  }
+
+  async function loadFacilityEvents() {
+    const payload = await fetchJSON(`${apiBase}/admin/events`, { cache: "no-store" });
+    facilityEvents = payload.events;
+    renderFacilityEvents();
+  }
+
+  function resetFacilityEventForm() {
+    eventForm.reset();
+    eventForm.elements.eventId.value = "";
+    eventFormTitle.textContent = "Create an event";
+    eventForm.querySelector('[type="submit"]').textContent = "Publish event";
+    eventCancelEditButton.hidden = true;
+    eventFormStatus.textContent = "";
+  }
+
+  function editFacilityEvent(id) {
+    const item = facilityEvents.find(facilityEvent => facilityEvent.id === id);
+    if (!item) {
+      dashboardStatus.textContent = "This event is no longer in the list. Refresh and try again.";
+      return;
+    }
+    for (const [field, value] of Object.entries({
+      eventId: item.id,
+      category: item.category,
+      title: item.title,
+      startDate: item.startDate,
+      endDate: item.endDate,
+      summary: item.summary,
+      description: item.description,
+      linkLabel: item.linkLabel,
+      linkUrl: item.linkUrl,
+    })) eventForm.elements[field].value = value;
+    eventFormTitle.textContent = `Edit ${item.category === "workshop" ? "workshop" : "facility event"}`;
+    eventForm.querySelector('[type="submit"]').textContent = "Save event changes";
+    eventCancelEditButton.hidden = false;
+    eventFormStatus.textContent = "";
+    eventForm.scrollIntoView({ behavior: "smooth", block: "center" });
+    eventForm.elements.title.focus({ preventScroll: true });
+  }
+
+  eventForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!eventForm.reportValidity()) return;
+    const values = new FormData(eventForm);
+    const startDate = values.get("startDate");
+    const endDate = values.get("endDate");
+    if (endDate < startDate) {
+      eventForm.elements.endDate.setCustomValidity("Choose an end date on or after the start date.");
+      eventForm.elements.endDate.reportValidity();
+      eventForm.elements.endDate.setCustomValidity("");
+      return;
+    }
+    const eventId = values.get("eventId");
+    const submitButton = eventForm.querySelector('[type="submit"]');
+    const eventPayload = {
+      category: values.get("category"),
+      title: values.get("title"),
+      startDate,
+      endDate,
+      summary: values.get("summary"),
+      description: values.get("description"),
+      linkLabel: values.get("linkLabel"),
+      linkUrl: values.get("linkUrl"),
+    };
+    submitButton.disabled = true;
+    eventFormStatus.textContent = eventId ? "Saving event changes…" : "Publishing event…";
+    try {
+      await fetchJSON(eventId
+        ? `${apiBase}/admin/events/${encodeURIComponent(eventId)}`
+        : `${apiBase}/admin/events`, {
+        method: eventId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(eventPayload),
+      });
+      resetFacilityEventForm();
+      await loadFacilityEvents();
+      dashboardStatus.textContent = "Event content updated on the homepage and Events & Workshop page.";
+    } catch (error) {
+      eventFormStatus.textContent = error.message;
+    } finally {
+      submitButton.disabled = false;
+    }
+  });
+
+  eventCancelEditButton.addEventListener("click", resetFacilityEventForm);
+  eventList.addEventListener("click", event => {
+    const editButton = event.target.closest("[data-event-edit]");
+    if (editButton) {
+      editFacilityEvent(editButton.dataset.eventEdit);
+      return;
+    }
+    const deleteButton = event.target.closest("[data-event-delete]");
+    if (deleteButton) requestManagedItemRemoval("event", deleteButton.dataset.eventDelete);
+  });
+  adminPortal.querySelector("#admin-event-refresh").addEventListener("click", async event => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      await loadFacilityEvents();
+    } catch (error) {
+      eventList.innerHTML = `<p class="admin-status">${escapeHTML(error.message)}</p>`;
+    } finally {
+      button.disabled = false;
+    }
+  });
+
   async function loadDashboard() {
-    const [bookingResult, calendarResult, instrumentsResult, closuresResult] = await Promise.allSettled([
+    const [bookingResult, calendarResult, instrumentsResult, closuresResult, eventsResult] = await Promise.allSettled([
       loadBookings(),
       loadFacilityCalendar(),
       fetchJSON(`${apiBase}/instruments`, { cache: "no-store" }),
       loadCalendarClosures(),
+      loadFacilityEvents(),
     ]);
     if (instrumentsResult.status === "fulfilled") {
       instruments = instrumentsResult.value;
@@ -382,6 +538,7 @@ if (adminPortal) {
     if (bookingResult.status === "rejected") dashboardStatus.textContent = bookingResult.reason.message;
     if (calendarResult.status === "rejected") calendarStatus.textContent = calendarResult.reason.message;
     if (closuresResult.status === "rejected") closureList.innerHTML = `<p class="admin-status">${escapeHTML(closuresResult.reason.message)}</p>`;
+    if (eventsResult.status === "rejected") eventList.innerHTML = `<p class="admin-status">${escapeHTML(eventsResult.reason.message)}</p>`;
   }
 
   async function checkSession() {
@@ -645,7 +802,7 @@ if (adminPortal) {
     }
     const closureDeleteButton = event.target.closest("[data-calendar-closure-delete]");
     if (closureDeleteButton) {
-      requestClosureRemoval(closureDeleteButton.dataset.calendarClosureDelete);
+      requestManagedItemRemoval("closure", closureDeleteButton.dataset.calendarClosureDelete);
     }
   });
 
@@ -773,26 +930,26 @@ if (adminPortal) {
   closureList.addEventListener("click", async event => {
     const button = event.target.closest("[data-closure-delete]");
     if (!button) return;
-    requestClosureRemoval(button.dataset.closureDelete);
+    requestManagedItemRemoval("closure", button.dataset.closureDelete);
   });
 
-  closureConfirmButton.addEventListener("click", () => { void removeCalendarClosure(); });
-  closureConfirmDialog.querySelector("[data-cancel-closure-removal]").addEventListener("click", () => {
-    pendingClosureRemovalId = "";
-    closureConfirmDialog.close();
+  itemConfirmButton.addEventListener("click", () => { void removeManagedItem(); });
+  itemConfirmCancelButton.addEventListener("click", () => {
+    pendingRemoval = null;
+    itemConfirmDialog.close();
   });
-  closureConfirmDialog.addEventListener("click", event => {
-    if (event.target === closureConfirmDialog && !closureConfirmButton.disabled) {
-      pendingClosureRemovalId = "";
-      closureConfirmDialog.close();
+  itemConfirmDialog.addEventListener("click", event => {
+    if (event.target === itemConfirmDialog && !itemConfirmButton.disabled) {
+      pendingRemoval = null;
+      itemConfirmDialog.close();
     }
   });
-  closureConfirmDialog.addEventListener("cancel", event => {
-    if (closureConfirmButton.disabled) {
+  itemConfirmDialog.addEventListener("cancel", event => {
+    if (itemConfirmButton.disabled) {
       event.preventDefault();
       return;
     }
-    pendingClosureRemovalId = "";
+    pendingRemoval = null;
   });
 
   const now = new Date();
