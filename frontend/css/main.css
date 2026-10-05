@@ -1260,7 +1260,7 @@ main section[id],main [id]{scroll-margin-top:28px}
   .sidebar-campus,.sidebar-footer{display:none}
 }
 @media(prefers-reduced-motion:no-preference){
-  .hero-particle{animation:pulse-drift 4.5s ease-in-out infinite}
+  .hero-particle{animation:pulse-drift 3.5s ease-in-out infinite}
   .home-booking-cta{animation:booking-cta-breathe 2.8s ease-in-out infinite}
   @keyframes pulse-drift{0%,100%{transform:translate(-50%,-50%)}50%{transform:translate(-50%,calc(-50% - 8px))}}
   @keyframes booking-cta-breathe{
