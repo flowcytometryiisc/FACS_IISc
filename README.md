@@ -18,8 +18,7 @@ preview; the live schedule requires the backend to be running.
   Forms, booking portal, staff admin portal, Workshops and Contact pages
 - Instrument cards with analyzer/sorter filters
 - Mobile navigation with active-page and instrument-filter highlighting
-- Original team portraits from the previous facility site, stored with the
-  People page assets
+- Team portraits stored with the People page assets
 - Individual supplied image tiles for the homepage, each page header, and the
   IISc seal and campus image in the sidebar
 - Homepage monthly overview chart with day-by-day Brown Bear calendar and portal
@@ -35,7 +34,7 @@ preview; the live schedule requires the backend to be running.
   bookings, session conflict constraints, form files and audit history
 - Hover and focus elevation on cards and links
 - Clickable map link for directions to the Division of Biological Sciences
-- Migrated committee, staff, offline-analysis software, research links,
+- Facility committee, staff, offline-analysis software, research links,
   facility documents and workshop archive
 
 The facility calendar combines live Brown Bear sessions with confirmed website
@@ -51,12 +50,10 @@ Brown Bear's separate admin sign-in. Authorized staff can edit or delete those
 legacy events there; website bookings can be rescheduled or deleted in this
 portal, with live conflict checks against both sources.
 
-Published content from the previous [Flow Cytometry Facility site](https://sites.google.com/view/facsiisc/)
-is organized in `frontend/data/site-content.json` and
-`frontend/data/instruments.json`. The old public booking calendar did not expose
-entries, the posted user-charge PDF is dated 2023, and the listed 2024 workshop
-has passed; these are identified as historical and should be confirmed with
-the facility before relying on them.
+Facility content is organized in `frontend/data/site-content.json` and
+`frontend/data/instruments.json`. The posted user-charge PDF is dated 2023, and
+the listed 2024 workshop has passed; contact the facility to confirm current
+information.
 
 ## Local API
 
