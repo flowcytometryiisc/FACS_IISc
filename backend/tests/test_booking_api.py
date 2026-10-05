@@ -46,7 +46,7 @@ class BookingApiTests(unittest.TestCase):
         self.slot = {
             "instrument": facility_app.load_json("instruments.json")[0]["name"],
             "date": slot_date.isoformat(),
-            "time": "09:00-11:00",
+            "time": "10:00-11:00",
         }
 
     def tearDown(self):
@@ -166,7 +166,7 @@ class BookingApiTests(unittest.TestCase):
 
     def test_booking_rejects_a_slot_that_has_already_started(self):
         current = facility_app.facility_now()
-        if current.hour < 9:
+        if current.hour < 10:
             self.skipTest("No facility session has started yet today.")
         started_time = next(
             time for time in reversed(facility_app.BOOKING_SLOTS)
@@ -183,10 +183,83 @@ class BookingApiTests(unittest.TestCase):
         availability = self.client.get(
             f"/api/booking-availability?start={today_slot['date']}&end={today_slot['date']}"
         )
-        self.assertIn(
-            {"date": today_slot["date"], "time": started_time},
-            availability.get_json()["unavailable"],
+        self.assertTrue(any(
+            slot["date"] == today_slot["date"] and slot["time"] == started_time
+            for slot in availability.get_json()["unavailable"]
+        ))
+
+    def test_booking_slots_respect_two_operator_limit(self):
+        instruments = facility_app.load_json("instruments.json")
+        first = self.slot
+        second = {
+            **self.slot,
+            "instrument": next(
+                item["name"] for item in instruments
+                if item["type"] == "Analyzer" and item["name"] != first["instrument"]
+            ),
+        }
+        third = {
+            **self.slot,
+            "instrument": next(
+                item["name"] for item in instruments if item["type"] == "Sorter"
+            ),
+        }
+        self.assertEqual(
+            self.client.post("/api/bookings", data=self.booking_data(first)).status_code,
+            201,
         )
+        self.assertEqual(
+            self.client.post("/api/bookings", data=self.booking_data(second)).status_code,
+            201,
+        )
+        response = self.client.post("/api/bookings", data=self.booking_data(third))
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("Only two instruments", response.get_json()["error"])
+
+    def test_sorter_booking_blocks_following_slot_for_cleaning(self):
+        sorter = next(
+            item["name"] for item in facility_app.load_json("instruments.json")
+            if item["type"] == "Sorter"
+        )
+        booked_slot = {**self.slot, "instrument": sorter}
+        created = self.client.post(
+            "/api/bookings", data=self.booking_data(booked_slot)
+        )
+        self.assertEqual(created.status_code, 201)
+
+        availability = self.client.get(
+            f"/api/booking-availability?start={self.slot['date']}&end={self.slot['date']}"
+        ).get_json()
+        cleaning_slot = next(
+            item for item in availability["booked"]
+            if item["instrument"] == sorter and item["time"] == "11:00-12:00"
+        )
+        self.assertEqual(cleaning_slot["source"], "cleaning")
+        self.assertEqual(cleaning_slot["title"], "Blocked for cleaning")
+
+        following_sorter_slot = {
+            **booked_slot,
+            "time": "11:00-12:00",
+        }
+        blocked = self.client.post(
+            "/api/bookings", data=self.booking_data(following_sorter_slot)
+        )
+        self.assertEqual(blocked.status_code, 409)
+        self.assertIn("blocked for cleaning", blocked.get_json()["error"])
+
+    def test_adjacent_sorter_slots_cannot_be_selected_together(self):
+        sorter = next(
+            item["name"] for item in facility_app.load_json("instruments.json")
+            if item["type"] == "Sorter"
+        )
+        data = self.booking_data()
+        data["slots"] = json.dumps([
+            {**self.slot, "instrument": sorter, "time": "10:00-11:00"},
+            {**self.slot, "instrument": sorter, "time": "11:00-12:00"},
+        ])
+        response = self.client.post("/api/bookings", data=data)
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("cleaning", response.get_json()["error"])
 
     def test_live_calendar_bookings_block_overlapping_instrument_slots(self):
         event = {
@@ -208,7 +281,7 @@ class BookingApiTests(unittest.TestCase):
                 {
                     "instrument": self.slot["instrument"],
                     "date": self.slot["date"],
-                    "time": "09:00-11:00",
+                    "time": "10:00-11:00",
                     "color": "purple",
                     "source": "calendar",
                     "title": "Existing CytoFLEX session",
@@ -216,7 +289,7 @@ class BookingApiTests(unittest.TestCase):
                 booked,
             )
             self.assertNotIn(
-                "11:00-13:00",
+                "11:00-12:00",
                 [slot["time"] for slot in booked if slot["instrument"] == self.slot["instrument"]],
             )
             other_instrument = next(
@@ -224,7 +297,7 @@ class BookingApiTests(unittest.TestCase):
                 if item["name"] != self.slot["instrument"]
             )
             self.assertNotIn(
-                (other_instrument, "09:00-11:00"),
+                (other_instrument, "10:00-11:00"),
                 [(slot["instrument"], slot["time"]) for slot in booked],
             )
             longer_event_slots = facility_app.brown_bear_booked_slots(
@@ -237,7 +310,7 @@ class BookingApiTests(unittest.TestCase):
             self.assertEqual(
                 [slot["time"] for slot in longer_event_slots
                  if slot["instrument"] == self.slot["instrument"]],
-                ["09:00-11:00", "11:00-13:00"],
+                ["10:00-11:00", "11:00-12:00", "12:00-13:00"],
             )
             conflict = self.client.post(
                 "/api/bookings", data=self.booking_data()
@@ -295,7 +368,7 @@ class BookingApiTests(unittest.TestCase):
         replacement_slot = {
             **self.slot,
             "date": replacement_date.isoformat(),
-            "time": "11:00-13:00",
+            "time": "11:00-12:00",
         }
         updated = self.client.put(
             f"/api/admin/bookings/{booking_id}/slots",
@@ -367,6 +440,36 @@ class BookingApiTests(unittest.TestCase):
         self.assertEqual(
             facility_app.slots_from_row({"slots": slot_values}),
             slot_values,
+        )
+
+    def test_booking_schedule_and_legacy_slot_expansion(self):
+        self.assertEqual(
+            facility_app.BOOKING_SLOTS,
+            (
+                "10:00-11:00",
+                "11:00-12:00",
+                "12:00-13:00",
+                "14:00-15:00",
+                "15:00-16:00",
+                "16:00-17:00",
+            ),
+        )
+        instruments = {
+            item["name"]: item for item in facility_app.load_json("instruments.json")
+        }
+        migrated = facility_app.expand_stored_slots(
+            [{
+                **self.slot,
+                "time": "09:00-11:00",
+            }, {
+                **self.slot,
+                "time": "11:00-13:00",
+            }],
+            instruments,
+        )
+        self.assertEqual(
+            [slot["time"] for slot in migrated],
+            ["10:00-11:00", "11:00-12:00", "12:00-13:00"],
         )
 
     def test_supabase_storage_uses_private_server_credentials(self):

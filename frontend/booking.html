@@ -12,7 +12,6 @@
   <header class="page-hero hero-booking"><div class="page-container"><div class="eyebrow light">OPERATOR-ASSISTED SESSIONS</div><h1>Book a flow cytometry session</h1><p>Select an instrument, find a time, and submit your completed facility user form.</p></div></header>
   <section class="page-container content-section booking-portal" data-booking-portal>
     <div class="booking-steps" aria-label="Booking steps"><span class="active"><b>1</b> Choose a session</span><span><b>2</b> Your details</span><span><b>3</b> Confirm booking</span></div>
-    <div class="booking-window-notice"><span aria-hidden="true">i</span><p><strong>Operator-assisted bookings</strong><br>Availability combines existing Brown Bear calendar sessions with confirmed bookings made through this portal. Newly confirmed portal bookings appear in this website’s calendar. Brown Bear itself is managed separately by facility staff, so contact them for changes to existing Brown Bear entries.</p></div>
     <div class="booking-layout">
       <div class="booking-main-column">
         <section class="booking-panel" aria-labelledby="booking-instrument-title">
@@ -22,6 +21,7 @@
           <div class="booking-slot-area">
             <div class="booking-slot-heading"><div><span class="eyebrow">AVAILABLE SESSIONS</span><h3 id="booking-slot-date">Loading availability…</h3></div><span class="booking-timezone">All times IST <button class="booking-availability-refresh" type="button" data-booking-refresh>Refresh</button></span></div>
             <div class="booking-slot-list" id="booking-slots" aria-live="polite"><p class="booking-inline-status">Loading available sessions…</p></div>
+            <p class="booking-inline-status booking-capacity-note">A maximum of two instruments can be booked in each time slot. Each sorter booking also reserves its next session for cleaning.</p>
             <p class="booking-inline-status" id="booking-availability-status" role="status">Availability is checked against Brown Bear every 30 seconds and again before a booking is confirmed.</p>
           </div>
         </section>

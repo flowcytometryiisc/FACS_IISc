@@ -29,7 +29,20 @@ CORS(app)
 BOOKING_DATABASE = BASE / "backend" / "instance" / "bookings.sqlite3"
 BOOKING_UPLOADS = BASE / "backend" / "instance" / "booking-forms"
 SUPABASE_STORAGE_BUCKET = os.environ.get("SUPABASE_STORAGE_BUCKET", "booking-forms")
-BOOKING_SLOTS = ("09:00-11:00", "11:00-13:00", "14:00-16:00", "16:00-18:00", "18:00-20:00")
+BOOKING_SLOTS = (
+    "10:00-11:00",
+    "11:00-12:00",
+    "12:00-13:00",
+    "14:00-15:00",
+    "15:00-16:00",
+    "16:00-17:00",
+)
+BOOKING_SLOTS_BY_TYPE = {
+    "Analyzer": BOOKING_SLOTS,
+    "Sorter": BOOKING_SLOTS,
+}
+SORTER_CLEANING_NEXT = dict(zip(BOOKING_SLOTS, BOOKING_SLOTS[1:]))
+MAX_CONCURRENT_INSTRUMENTS = 2
 BOOKING_WEEKDAYS = {0, 1, 2, 3, 4}
 SPECIMEN_TYPES = (
     "Cell suspension",
@@ -278,11 +291,12 @@ def slots_from_row(row):
 
 
 def booking_row(row):
+    instruments = {item["name"]: item for item in load_json("instruments.json")}
     instrument_colors = {
         instrument["name"]: instrument.get("color", "gray")
-        for instrument in load_json("instruments.json")
+        for instrument in instruments.values()
     }
-    slots = slots_from_row(row)
+    slots = expand_stored_slots(slots_from_row(row), instruments)
     for slot in slots:
         slot.setdefault("color", instrument_colors.get(slot["instrument"], "gray"))
     return {
@@ -400,6 +414,73 @@ def event_time_range(time_text):
     return start_minutes, end_minutes
 
 
+def expand_stored_slots(slots, instruments):
+    expanded = {}
+    for slot in slots:
+        if slot["time"] in BOOKING_SLOTS:
+            times = (slot["time"],)
+        else:
+            time_range = event_time_range(slot["time"])
+            if time_range is None:
+                continue
+            start, end = time_range
+            times = tuple(
+                time for time in BOOKING_SLOTS
+                if int(time[:2]) * 60 + int(time[3:5]) < end
+                and start < int(time[6:8]) * 60 + int(time[9:11])
+            )
+        for time in times:
+            instrument = instruments.get(slot["instrument"])
+            if instrument is None or time not in BOOKING_SLOTS_BY_TYPE.get(
+                instrument.get("type"), ()
+            ):
+                continue
+            expanded[(slot["instrument"], slot["date"], time)] = {
+                **slot,
+                "time": time,
+                "color": slot.get("color", instrument.get("color", "gray")),
+            }
+    return list(expanded.values())
+
+
+def slot_identity(slot):
+    return slot["instrument"], slot["date"], slot["time"]
+
+
+def sorter_cleaning_slots(slots, instruments):
+    cleaning = set()
+    for slot in slots:
+        instrument = instruments.get(slot["instrument"])
+        next_time = SORTER_CLEANING_NEXT.get(slot["time"])
+        if instrument and instrument.get("type") == "Sorter" and next_time:
+            cleaning.add((slot["instrument"], slot["date"], next_time))
+    return cleaning
+
+
+def booking_conflict(candidate_slots, occupied_slots, instruments):
+    candidate_keys = {slot_identity(slot) for slot in candidate_slots}
+    occupied_keys = {slot_identity(slot) for slot in occupied_slots}
+    if candidate_keys & occupied_keys:
+        return "One or more selected sessions are already booked. Refresh availability."
+
+    occupied_cleaning = sorter_cleaning_slots(occupied_slots, instruments)
+    candidate_cleaning = sorter_cleaning_slots(candidate_slots, instruments)
+    if candidate_keys & (occupied_cleaning | candidate_cleaning):
+        return "That sorter slot is blocked for cleaning after the preceding session."
+    if candidate_cleaning & (occupied_keys | candidate_keys):
+        return "A selected sorter session would overlap a booked slot needed for cleaning."
+
+    instruments_per_slot = {}
+    for instrument, slot_date, time in occupied_keys | candidate_keys:
+        instruments_per_slot.setdefault((slot_date, time), set()).add(instrument)
+    if any(
+        len(instrument_names) > MAX_CONCURRENT_INSTRUMENTS
+        for instrument_names in instruments_per_slot.values()
+    ):
+        return "Only two instruments can be booked during the same time slot."
+    return None
+
+
 def brown_bear_booked_slots(events, instruments):
     instrument_records = {item["name"]: item for item in instruments}
     booked_slots = []
@@ -477,9 +558,11 @@ def get_booking_availability():
         connection.close()
 
     unavailable_slots = []
+    unavailable_by_key = {}
     now = facility_now()
+    instrument_records = {item["name"]: item for item in instruments}
     for row in rows:
-        for slot in slots_from_row(row):
+        for slot in expand_stored_slots(slots_from_row(row), instrument_records):
             if start <= slot["date"] <= end:
                 booked_slots.append({
                     **slot,
@@ -494,23 +577,49 @@ def get_booking_availability():
                     "source": "portal",
                     "title": "Portal booking",
                 })
+    cleaning_slots = sorter_cleaning_slots(booked_slots, instrument_records)
+    for instrument_name, slot_date, time in cleaning_slots:
+        instrument = next(item for item in instruments if item["name"] == instrument_name)
+        booked_slots.append({
+            "instrument": instrument_name,
+            "date": slot_date,
+            "time": time,
+            "color": instrument.get("color", "gray"),
+            "source": "cleaning",
+            "title": "Blocked for cleaning",
+        })
+
+    occupied_by_time = {}
+    for slot in booked_slots:
+        if slot.get("source") != "cleaning":
+            occupied_by_time.setdefault((slot["date"], slot["time"]), set()).add(
+                slot["instrument"]
+            )
+    for (slot_date, time), instrument_names in occupied_by_time.items():
+        if len(instrument_names) >= MAX_CONCURRENT_INSTRUMENTS:
+            unavailable_by_key[(slot_date, time)] = "operator_limit"
+
     current = now.date().isoformat()
     for day_offset in range((end_date - start_date).days + 1):
         slot_date = (start_date + timedelta(days=day_offset)).isoformat()
         if slot_date != current:
             continue
-        unavailable_slots.extend(
-            {"date": slot_date, "time": time}
+        unavailable_by_key.update({
+            (slot_date, time): "started"
             for time in BOOKING_SLOTS
             if time.split("-", 1)[0] <= now.strftime("%H:%M")
-        )
+        })
     for day_offset in range((end_date - start_date).days + 1):
         slot_date = start_date + timedelta(days=day_offset)
         if slot_date.weekday() not in BOOKING_WEEKDAYS:
-            unavailable_slots.extend(
-                {"date": slot_date.isoformat(), "time": time}
+            unavailable_by_key.update({
+                (slot_date.isoformat(), time): "weekend"
                 for time in BOOKING_SLOTS
-            )
+            })
+    unavailable_slots.extend(
+        {"date": slot_date, "time": time, "reason": reason}
+        for (slot_date, time), reason in unavailable_by_key.items()
+    )
     response = jsonify({
         "start": start,
         "end": end,
@@ -580,7 +689,9 @@ def create_booking():
             return jsonify({"error": "A selected session has an invalid date."}), 400
         if (
             instrument not in instruments
-            or time not in BOOKING_SLOTS
+            or time not in BOOKING_SLOTS_BY_TYPE.get(
+                instrument_records[instrument]["type"], ()
+            )
             or parsed_date.weekday() not in BOOKING_WEEKDAYS
             or parsed_date < facility_today()
             or parsed_date > facility_today() + timedelta(days=90)
@@ -606,19 +717,18 @@ def create_booking():
         calendar_events = brown_bear_events_between(booking_start, booking_end)
     except BrownBearCalendarError as error:
         return jsonify({"error": str(error)}), 502
-    calendar_booked = {
-        (slot["instrument"], slot["date"], slot["time"])
-        for slot in brown_bear_booked_slots(
-            calendar_events, list(instrument_records.values())
-        )
-    }
-    if any(
-        (slot["instrument"], slot["date"], slot["time"]) in calendar_booked
-        for slot in normalized_slots
-    ):
+    calendar_booked = brown_bear_booked_slots(
+        calendar_events, list(instrument_records.values())
+    )
+    if {
+        slot_identity(slot) for slot in normalized_slots
+    } & {slot_identity(slot) for slot in calendar_booked}:
         return jsonify({
             "error": "One or more selected sessions are already booked in the facility calendar. Refresh availability."
         }), 409
+    conflict = booking_conflict(normalized_slots, calendar_booked, instrument_records)
+    if conflict:
+        return jsonify({"error": conflict}), 409
 
     upload = request.files.get("userForm")
     if upload is None or not upload.filename:
@@ -644,15 +754,18 @@ def create_booking():
         existing = connection.execute(
             "SELECT slots FROM bookings WHERE status = 'confirmed'"
         ).fetchall()
-        occupied = {
-            (item["instrument"], item["date"], item["time"])
+        occupied = [
+            slot
             for row in existing
-            for item in slots_from_row(row)
-        }
-        if any((item["instrument"], item["date"], item["time"]) in occupied for item in normalized_slots):
+            for slot in expand_stored_slots(slots_from_row(row), instrument_records)
+        ]
+        conflict = booking_conflict(
+            normalized_slots, calendar_booked + occupied, instrument_records
+        )
+        if conflict:
             connection.rollback()
             remove_booking_form(form_path)
-            return jsonify({"error": "One or more selected slots were just booked. Refresh availability."}), 409
+            return jsonify({"error": conflict}), 409
 
         connection.execute(
             """INSERT INTO bookings (
@@ -783,8 +896,9 @@ def get_admin_calendar():
     instrument_colors = {
         item["name"]: item.get("color", "gray") for item in load_json("instruments.json")
     }
+    instrument_records = {item["name"]: item for item in load_json("instruments.json")}
     for row in rows:
-        for slot in slots_from_row(row):
+        for slot in expand_stored_slots(slots_from_row(row), instrument_records):
             if slot["date"].startswith(month):
                 events.append({
                     "date": slot["date"],
@@ -829,11 +943,16 @@ def update_admin_booking(booking_id):
         if row is None:
             return jsonify({"error": "Booking not found."}), 404
         initial_status = row["status"]
-        calendar_booked = set()
+        instrument_records = {
+            item["name"]: item for item in load_json("instruments.json")
+        }
+        calendar_booked = []
         if status == "confirmed" and row["status"] != "confirmed":
-            if any(slot_has_started(item) for item in slots_from_row(row)):
+            restoring_slots = expand_stored_slots(
+                slots_from_row(row), instrument_records
+            )
+            if any(slot_has_started(item) for item in restoring_slots):
                 return jsonify({"error": "A past session cannot be restored."}), 409
-            restoring_slots = slots_from_row(row)
             try:
                 calendar_events = brown_bear_events_between(
                     min(date.fromisoformat(item["date"]) for item in restoring_slots),
@@ -841,12 +960,9 @@ def update_admin_booking(booking_id):
                 )
             except BrownBearCalendarError as error:
                 return jsonify({"error": str(error)}), 502
-            calendar_booked = {
-                (item["instrument"], item["date"], item["time"])
-                for item in brown_bear_booked_slots(
-                    calendar_events, load_json("instruments.json")
-                )
-            }
+            calendar_booked = brown_bear_booked_slots(
+                calendar_events, list(instrument_records.values())
+            )
         connection.execute("BEGIN IMMEDIATE")
         row = connection.execute(
             "SELECT * FROM bookings WHERE id = ?", (booking_id,)
@@ -858,33 +974,36 @@ def update_admin_booking(booking_id):
             connection.rollback()
             return jsonify({"error": "The booking status changed. Refresh the admin booking list."}), 409
         if status == "confirmed" and row["status"] != "confirmed":
-            restoring_slots = slots_from_row(row)
+            restoring_slots = expand_stored_slots(
+                slots_from_row(row), instrument_records
+            )
             if any(slot_has_started(item) for item in restoring_slots):
                 connection.rollback()
                 return jsonify({"error": "A past session cannot be restored."}), 409
-            if any(
-                (item["instrument"], item["date"], item["time"]) in calendar_booked
-                for item in restoring_slots
-            ):
-                connection.rollback()
-                return jsonify({
-                    "error": "The session is now booked in the facility calendar and cannot be restored."
-                }), 409
             existing = connection.execute(
                 "SELECT id, slots FROM bookings WHERE status = 'confirmed' AND id != ?",
                 (booking_id,),
             ).fetchall()
-            occupied = {
-                (item["instrument"], item["date"], item["time"])
+            occupied = [
+                item
                 for other in existing
-                for item in slots_from_row(other)
-            }
-            if any(
-                (item["instrument"], item["date"], item["time"]) in occupied
-                for item in slots_from_row(row)
-            ):
+                for item in expand_stored_slots(
+                    slots_from_row(other), instrument_records
+                )
+            ]
+            if {
+                slot_identity(slot) for slot in restoring_slots
+            } & {slot_identity(slot) for slot in calendar_booked}:
                 connection.rollback()
-                return jsonify({"error": "The slot has since been booked by another user."}), 409
+                return jsonify({
+                    "error": "The session is now booked in the facility calendar and cannot be restored."
+                }), 409
+            conflict = booking_conflict(
+                restoring_slots, calendar_booked + occupied, instrument_records
+            )
+            if conflict:
+                connection.rollback()
+                return jsonify({"error": conflict}), 409
         connection.execute(
             "UPDATE bookings SET status = ? WHERE id = ?", (status, booking_id)
         )
@@ -929,7 +1048,9 @@ def update_admin_booking_slots(booking_id):
             return jsonify({"error": "A selected session has an invalid date."}), 400
         if (
             instrument not in instrument_records
-            or time not in BOOKING_SLOTS
+            or time not in BOOKING_SLOTS_BY_TYPE.get(
+                instrument_records[instrument]["type"], ()
+            )
             or parsed_date.weekday() not in BOOKING_WEEKDAYS
             or parsed_date < facility_today()
             or parsed_date > facility_today() + timedelta(days=90)
@@ -956,17 +1077,18 @@ def update_admin_booking_slots(booking_id):
         )
     except BrownBearCalendarError as error:
         return jsonify({"error": str(error)}), 502
-    calendar_booked = {
-        (slot["instrument"], slot["date"], slot["time"])
-        for slot in brown_bear_booked_slots(
-            calendar_events, list(instrument_records.values())
-        )
-    }
-    if any(
-        (slot["instrument"], slot["date"], slot["time"]) in calendar_booked
-        for slot in normalized_slots
-    ):
+    calendar_booked = brown_bear_booked_slots(
+        calendar_events, list(instrument_records.values())
+    )
+    if {
+        slot_identity(slot) for slot in normalized_slots
+    } & {slot_identity(slot) for slot in calendar_booked}:
         return jsonify({"error": "A replacement session conflicts with the Brown Bear calendar."}), 409
+    conflict = booking_conflict(
+        normalized_slots, calendar_booked, instrument_records
+    )
+    if conflict:
+        return jsonify({"error": conflict}), 409
 
     connection = booking_connection()
     try:
@@ -984,17 +1106,19 @@ def update_admin_booking_slots(booking_id):
             "SELECT id, slots FROM bookings WHERE status = 'confirmed' AND id != ?",
             (booking_id,),
         ).fetchall()
-        occupied = {
-            (slot["instrument"], slot["date"], slot["time"])
+        occupied = [
+            slot
             for other in existing
-            for slot in slots_from_row(other)
-        }
-        if any(
-            (slot["instrument"], slot["date"], slot["time"]) in occupied
-            for slot in normalized_slots
-        ):
+            for slot in expand_stored_slots(
+                slots_from_row(other), instrument_records
+            )
+        ]
+        conflict = booking_conflict(
+            normalized_slots, calendar_booked + occupied, instrument_records
+        )
+        if conflict:
             connection.rollback()
-            return jsonify({"error": "A replacement session is already reserved by another website booking."}), 409
+            return jsonify({"error": conflict}), 409
         connection.execute(
             "UPDATE bookings SET slots = ? WHERE id = ?",
             (json.dumps(normalized_slots), booking_id),
@@ -1247,8 +1371,9 @@ def get_calendar():
     instrument_colors = {
         item["name"]: item.get("color", "gray") for item in load_json("instruments.json")
     }
+    instrument_records = {item["name"]: item for item in load_json("instruments.json")}
     for row in rows:
-        for slot in slots_from_row(row):
+        for slot in expand_stored_slots(slots_from_row(row), instrument_records):
             if slot["date"].startswith(month):
                 events.append({
                     "date": slot["date"],

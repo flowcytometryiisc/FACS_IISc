@@ -21,7 +21,7 @@ if (adminPortal) {
   const editForm = document.querySelector("#admin-edit-form");
   const editSlots = document.querySelector("#admin-edit-slots");
   const editStatus = document.querySelector("#admin-edit-status");
-  const bookingTimes = ["09:00-11:00", "11:00-13:00", "14:00-16:00", "16:00-18:00", "18:00-20:00"];
+  const bookingTimes = ["10:00-11:00", "11:00-12:00", "12:00-13:00", "14:00-15:00", "15:00-16:00", "16:00-17:00"];
   let bookings = [];
   let instruments = [];
   let editingBookingId = "";
@@ -40,6 +40,14 @@ if (adminPortal) {
     return new Intl.DateTimeFormat("en-IN", {
       weekday: "short", day: "numeric", month: "short", year: "numeric"
     }).format(new Date(`${value}T12:00:00`));
+  }
+
+  function formatTimeSlot(value) {
+    return value.split("-").map(part => {
+      const [hourText, minute] = part.split(":");
+      const hour = Number(hourText);
+      return `${hour % 12 || 12}:${minute} ${hour < 12 ? "AM" : "PM"}`;
+    }).join(" – ");
   }
 
   function facilityDateOffset(days = 0) {
@@ -358,8 +366,8 @@ if (adminPortal) {
         <legend>Session ${index + 1}</legend>
         <label>Instrument<select name="instrument" required>${instrumentOptions}</select></label>
         <label>Date<input name="date" type="date" min="${facilityDateOffset()}" max="${facilityDateOffset(90)}" required value="${escapeHTML(slot.date)}"></label>
-        <label>Time<select name="time" required>${bookingTimes.map(time =>
-          `<option value="${time}">${time.replace("-", " – ")}</option>`
+        <label>Time<select name="time" required>${bookingTimes.map((time, timeIndex) =>
+          `${timeIndex === 3 ? '<option disabled>Lunch · 1:00 – 2:00 PM</option>' : ""}<option value="${time}">${formatTimeSlot(time)}</option>`
         ).join("")}</select></label>
       </fieldset>`).join("");
     [...editSlots.querySelectorAll("[data-edit-slot]")].forEach((row, index) => {

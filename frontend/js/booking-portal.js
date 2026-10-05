@@ -17,11 +17,13 @@ if (bookingPortal) {
   const today = new Date();
   const dates = [];
   const instruments = [];
+  const timeSlots = ["10:00-11:00", "11:00-12:00", "12:00-13:00", "14:00-15:00", "15:00-16:00", "16:00-17:00"];
+  const sorterCleaningNext = new Map(timeSlots.map((time, index) => [time, timeSlots[index + 1]]).filter(([, next]) => next));
   const selectedInstruments = new Set();
   const selectedSlots = new Map();
   let selectedDate = "";
   let bookedSlots = new Map();
-  let unavailableSlots = new Set();
+  let unavailableSlots = new Map();
   let availabilityError = "";
   let availabilityLoaded = false;
   let availabilityRefreshing = false;
@@ -39,6 +41,14 @@ if (bookingPortal) {
 
   function formatDate(value, options) {
     return new Intl.DateTimeFormat("en-IN", options).format(new Date(`${value}T12:00:00`));
+  }
+
+  function formatTimeSlot(value) {
+    return value.split("-").map(part => {
+      const [hourText, minute] = part.split(":");
+      const hour = Number(hourText);
+      return `${hour % 12 || 12}:${minute} ${hour < 12 ? "AM" : "PM"}`;
+    }).join(" – ");
   }
 
   async function fetchJSON(url, options = {}) {
@@ -99,19 +109,55 @@ if (bookingPortal) {
       const name = instrument.name.replace(/[&<>"']/g, character => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
       })[character]);
-      const timeSlots = ["09:00-11:00", "11:00-13:00", "14:00-16:00", "16:00-18:00", "18:00-20:00"];
-      return `<section class="booking-instrument-slots" data-instrument-color="${instrument.color || "gray"}"><h4>${name}</h4><div class="booking-time-grid">${timeSlots.map(time => {
+      const timeOptions = timeSlots.map((time, index) => {
         const slot = { instrument: instrument.name, date: selectedDate, time };
         const key = slotKey(slot);
         const selected = selectedSlots.has(key);
         const existingBooking = bookedSlots.get(key);
         const booked = Boolean(existingBooking);
-        const unavailable = unavailableSlots.has(`${selectedDate}|${time}`);
-        const status = booked
-          ? existingBooking.source === "calendar" ? "Booked · Facility calendar" : "Booked · Portal"
-          : unavailable ? "Unavailable" : selected ? "Selected" : "Available";
-        return `<button type="button" class="booking-time-slot${selected ? " selected" : ""}${booked ? " booked" : ""}${unavailable ? " unavailable" : ""}" data-slot-key="${key}" ${booked || unavailable || availabilityRefreshing ? "disabled" : ""} aria-pressed="${selected}"><span>${time.replace("-", " – ")}</span><small>${availabilityRefreshing && !booked && !unavailable ? "Checking…" : status}</small></button>`;
-      }).join("")}</div></section>`;
+        const unavailableReason = unavailableSlots.get(`${selectedDate}|${time}`);
+        const selectedCleaning = instrument.type === "Sorter"
+          && [...selectedSlots.values()].some(item =>
+            item.instrument === instrument.name
+            && item.date === selectedDate
+            && sorterCleaningNext.get(item.time) === time
+          );
+        const conflictsWithNextSelection = instrument.type === "Sorter"
+          && [...selectedSlots.values()].some(item =>
+            item.instrument === instrument.name
+            && item.date === selectedDate
+            && sorterCleaningNext.get(time) === item.time
+          );
+        const operatorBookings = new Set([
+          ...[...bookedSlots.values()]
+            .filter(item => item.date === selectedDate && item.time === time && item.source !== "cleaning")
+            .map(item => item.instrument),
+          ...[...selectedSlots.values()]
+            .filter(item => item.date === selectedDate && item.time === time)
+            .map(item => item.instrument),
+        ]);
+        const operatorLimit = !selected && !operatorBookings.has(instrument.name)
+          && (operatorBookings.size >= 2 || unavailableReason === "operator_limit");
+        const cleaning = existingBooking?.source === "cleaning" || selectedCleaning || conflictsWithNextSelection;
+        const unavailable = Boolean(unavailableReason) || operatorLimit;
+        const status = cleaning
+          ? "Blocked for cleaning"
+          : booked
+            ? existingBooking.source === "calendar" ? "Booked · Facility calendar" : "Booked · Portal"
+            : selected
+              ? "Selected"
+              : operatorLimit
+                ? "Operator limit reached"
+                : unavailableReason === "started"
+                  ? "Session started"
+                  : unavailableReason === "weekend"
+                    ? "Not bookable"
+                    : unavailable ? "Unavailable" : "Available";
+        const disabled = booked || cleaning || unavailable || availabilityRefreshing;
+        const button = `<button type="button" class="booking-time-slot${selected ? " selected" : ""}${booked ? " booked" : ""}${cleaning ? " cleaning" : ""}${unavailable ? " unavailable" : ""}" data-slot-key="${key}" ${disabled ? "disabled" : ""} aria-pressed="${selected}"><span>${formatTimeSlot(time)}</span><small>${availabilityRefreshing && !booked && !cleaning && !unavailable ? "Checking…" : status}</small></button>`;
+        return `${index === 3 ? '<div class="booking-lunch-break">Lunch · 1:00 – 2:00 PM</div>' : ""}${button}`;
+      }).join("");
+      return `<section class="booking-instrument-slots" data-instrument-color="${instrument.color || "gray"}"><h4>${name} · ${instrument.type}</h4><div class="booking-time-grid">${timeOptions}</div></section>`;
     }).join("");
     slotList.querySelectorAll("[data-slot-key]").forEach(button => {
       button.addEventListener("click", () => {
@@ -124,6 +170,24 @@ if (bookingPortal) {
           return;
         } else {
           const [instrument, date, time] = key.split("|");
+          const instrumentRecord = instruments.find(item => item.name === instrument);
+          const concurrent = new Set([
+            ...[...bookedSlots.values()]
+              .filter(item => item.date === date && item.time === time && item.source !== "cleaning")
+              .map(item => item.instrument),
+            ...[...selectedSlots.values()]
+              .filter(item => item.date === date && item.time === time)
+              .map(item => item.instrument),
+          ]);
+          if (concurrent.size >= 2 && !concurrent.has(instrument)) {
+            availabilityStatus.textContent = "Only two instruments can be booked during the same time slot.";
+            return;
+          }
+          const nextSorterSlot = instrumentRecord?.type === "Sorter" && sorterCleaningNext.get(time);
+          if (nextSorterSlot && selectedSlots.has(slotKey({ instrument, date, time: nextSorterSlot }))) {
+            availabilityStatus.textContent = "This sorter session would block the next selected slot for cleaning.";
+            return;
+          }
           selectedSlots.set(key, { instrument, date, time });
         }
         availabilityStatus.textContent = "";
@@ -148,7 +212,7 @@ if (bookingPortal) {
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
       })[character]);
       const instrument = instruments.find(item => item.name === slot.instrument);
-      return `<div class="booking-selected-item" data-instrument-color="${instrument?.color || "gray"}"><span><strong>${name}</strong><small>${formatDate(slot.date, { weekday: "short", day: "numeric", month: "short" })} · ${slot.time.replace("-", " – ")}</small></span><button type="button" data-remove-slot="${slotKey(slot)}" aria-label="Remove ${name} session">×</button></div>`;
+      return `<div class="booking-selected-item" data-instrument-color="${instrument?.color || "gray"}"><span><strong>${name}</strong><small>${formatDate(slot.date, { weekday: "short", day: "numeric", month: "short" })} · ${formatTimeSlot(slot.time)}</small></span><button type="button" data-remove-slot="${slotKey(slot)}" aria-label="Remove ${name} session">×</button></div>`;
     }).join("");
     selectionSummary.textContent = `${slots.length} session${slots.length === 1 ? "" : "s"} selected · Each session will be reserved immediately.`;
     selectedList.querySelectorAll("[data-remove-slot]").forEach(button => {
@@ -174,7 +238,7 @@ if (bookingPortal) {
       try {
       const payload = await fetchJSON(`${apiBase}/booking-availability?start=${start}&end=${end}`, { cache: "no-store" });
       bookedSlots = new Map(payload.booked.map(slot => [slotKey(slot), slot]));
-      unavailableSlots = new Set(payload.unavailable.map(slot => `${slot.date}|${slot.time}`));
+      unavailableSlots = new Map(payload.unavailable.map(slot => [`${slot.date}|${slot.time}`, slot.reason]));
       let selectionChanged = false;
       for (const key of selectedSlots.keys()) {
         if (bookedSlots.has(key) || unavailableSlots.has(`${selectedSlots.get(key).date}|${selectedSlots.get(key).time}`)) {
