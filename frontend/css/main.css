@@ -1781,7 +1781,9 @@ main section[id],main [id]{scroll-margin-top:28px}
 @media(max-width:790px){
   .site-sidebar{height:72px;min-height:0;align-items:center;padding:8px 18px 0}
   .sidebar-brand{height:48px;min-height:0;align-items:center;margin:7px 0 0}
-  .menu-toggle{margin:5px 0 0 auto}
+  .sidebar-brand{order:1}
+  .menu-toggle{order:3;margin:0 0 0 8px}
+  .sidebar-admin-link{position:static;order:2;min-height:34px;margin:0 0 0 auto;padding:6px 9px;border:1px solid rgba(215,232,252,.18);border-radius:18px;background:rgba(255,255,255,.07);transform:none}
   .site-sidebar .nav{top:calc(100% - 2px);right:14px;left:auto;width:min(320px,calc(100vw - 28px))}
   .page-hero{padding:25px 0 23px}
   .page-hero h1{font-size:clamp(26px,3.4vw,32px);letter-spacing:-.55px}
@@ -1790,7 +1792,8 @@ main section[id],main [id]{scroll-margin-top:28px}
 @media(max-width:560px){
   .site-sidebar{height:70px;padding:8px 16px 0}
   .sidebar-brand{margin-top:7px}
-  .menu-toggle{margin-top:5px}
+  .menu-toggle{margin:0 0 0 8px}
+  .sidebar-admin-link{font-size:8px}
   .site-sidebar .nav{top:calc(100% - 2px);right:12px;width:min(320px,calc(100vw - 24px))}
   .page-container{width:calc(100% - 32px)}
   .page-hero{padding:22px 0 20px}
