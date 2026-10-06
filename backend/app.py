@@ -121,7 +121,7 @@ SORTER_CLEANING_NEXT = {
     if current.split("-", 1)[1] == following.split("-", 1)[0]
 }
 MAX_CONCURRENT_INSTRUMENTS = 2
-BOOKING_WEEKDAYS = {0, 1, 2, 3, 4}
+BOOKING_WEEKDAYS = {0, 1, 2, 3, 4, 5}
 SPECIMEN_TYPES = (
     "Cell suspension",
     "Primary cells",
@@ -143,6 +143,13 @@ def facility_today():
 
 def facility_now():
     return datetime.now(timezone(timedelta(hours=5, minutes=30)))
+
+
+def booking_window_end(reference_date=None):
+    current = reference_date or facility_today()
+    next_month = (current.replace(day=28) + timedelta(days=4)).replace(day=1)
+    month_after_next = (next_month.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return month_after_next - timedelta(days=1)
 
 
 def slot_has_started(slot, now=None):
@@ -963,7 +970,13 @@ def normalize_booking_slots(slots, instrument_records, allow_holiday_override=Fa
                 and not (allow_holiday_override and holiday)
             )
             or parsed_date < facility_today()
-            or parsed_date > facility_today() + timedelta(days=90)
+            or (
+                parsed_date > (
+                    facility_today() + timedelta(days=90)
+                    if allow_holiday_override
+                    else booking_window_end()
+                )
+            )
         ):
             return None, "A selected session is no longer available."
         value = {
@@ -1040,8 +1053,8 @@ def get_booking_availability():
         end_date = date.fromisoformat(end)
     except ValueError:
         return jsonify({"error": "Provide a valid start and end date as YYYY-MM-DD."}), 400
-    if end_date < start_date or (end_date - start_date).days > 31:
-        return jsonify({"error": "The requested date range must be within 31 days."}), 400
+    if end_date < start_date or (end_date - start_date).days > 62:
+        return jsonify({"error": "The requested date range must be within 62 days."}), 400
 
     try:
         brown_bear_events = exclude_iisc_holiday_events(
@@ -1161,6 +1174,16 @@ def get_booking_availability():
                 (slot_date.isoformat(), time): "weekend"
                 for time in BOOKING_SLOTS
             })
+        if (
+            slot_date > booking_window_end()
+            and slot_date.weekday() in BOOKING_WEEKDAYS
+            and slot_date.isoformat() not in holiday_by_date
+            and str(slot_date.year) in known_holiday_years
+        ):
+            unavailable_by_key.update({
+                (slot_date.isoformat(), time): "booking_window"
+                for time in BOOKING_SLOTS
+            })
     unavailable_by_key.update({
         key: value["reason"] for key, value in closure_blocks.items()
     })
@@ -1262,7 +1285,7 @@ def create_booking():
             )
             or parsed_date.weekday() not in BOOKING_WEEKDAYS
             or parsed_date < facility_today()
-            or parsed_date > facility_today() + timedelta(days=90)
+            or parsed_date > booking_window_end()
         ):
             return jsonify({"error": "A selected session is no longer available."}), 400
         normalized = {

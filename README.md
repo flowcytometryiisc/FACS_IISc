@@ -31,7 +31,7 @@ preview; the live schedule requires the backend to be running.
   instrument palette in the admin usage overview
 - Multi-instrument booking form with live slot availability, booking details,
   required completed user-form upload, pending staff review and slot conflict checks
-- Password-protected booking dashboard with an interactive weekday month grid,
+- Password-protected booking dashboard with an interactive monthly booking grid,
   selected-day agenda and instrument filter; staff can review, accept, decline,
   create, edit and delete website bookings, with secure form downloads
 - Admin-managed events and workshops with editable dates, descriptions, and

@@ -387,7 +387,7 @@ if (bookingPortal) {
         selectedInstruments.add(requestedInstrument);
       }
       let firstDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      const lastBookableDate = new Date(firstDate.getFullYear(), firstDate.getMonth(), firstDate.getDate() + 90);
+      const lastBookableDate = new Date(today.getFullYear(), today.getMonth() + 2, 0);
       if (requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
         const [year, month, day] = requestedDate.split("-").map(Number);
         const parsed = new Date(year, month - 1, day);
@@ -396,16 +396,15 @@ if (bookingPortal) {
           && localDateKey(parsed) === requestedDate;
         if (withinBookingWindow) firstDate = parsed;
       }
-      while (firstDate <= lastBookableDate && (firstDate.getDay() === 0 || firstDate.getDay() === 6)) {
+      while (firstDate <= lastBookableDate && firstDate.getDay() === 0) {
         firstDate.setDate(firstDate.getDate() + 1);
       }
       if (firstDate > lastBookableDate) {
         firstDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-        while (firstDate.getDay() === 0 || firstDate.getDay() === 6) firstDate.setDate(firstDate.getDate() + 1);
+        while (firstDate.getDay() === 0) firstDate.setDate(firstDate.getDate() + 1);
       }
-      for (let day = new Date(firstDate); dates.length < 14; day.setDate(day.getDate() + 1)) {
-        if (day > lastBookableDate) break;
-        if (day.getDay() !== 0 && day.getDay() !== 6) dates.push(localDateKey(day));
+      for (let day = new Date(firstDate); day <= lastBookableDate; day.setDate(day.getDate() + 1)) {
+        if (day.getDay() !== 0) dates.push(localDateKey(day));
       }
       selectedDate = dates[0];
       renderInstruments();

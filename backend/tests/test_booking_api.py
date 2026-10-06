@@ -874,18 +874,75 @@ class BookingApiTests(unittest.TestCase):
         self.assertTrue(any(event["source"] == "holiday" for event in payload["events"]))
         self.assertFalse(payload["portalBookingsAvailable"])
 
-    def test_booking_rejects_weekend_sessions(self):
+    def test_booking_allows_saturday_and_rejects_sunday_sessions(self):
         saturday = facility_app.facility_today()
-        while saturday.weekday() != 5:
+        while saturday.weekday() != 5 or saturday == facility_app.facility_today():
             saturday += timedelta(days=1)
-        response = self.client.post(
+        saturday_response = self.client.post(
             "/api/bookings",
             data=self.booking_data({
                 **self.slot,
                 "date": saturday.isoformat(),
             }),
         )
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(saturday_response.status_code, 201)
+
+        sunday_response = self.client.post(
+            "/api/bookings",
+            data=self.booking_data({
+                **self.slot,
+                "date": (saturday + timedelta(days=1)).isoformat(),
+            }),
+        )
+        self.assertEqual(sunday_response.status_code, 400)
+
+    def test_booking_window_reaches_the_end_of_next_month_only(self):
+        reference_date = facility_app.facility_today()
+        window_end = facility_app.booking_window_end(reference_date)
+        last_bookable_date = window_end
+        while last_bookable_date.weekday() == 6:
+            last_bookable_date -= timedelta(days=1)
+        outside_window_date = window_end + timedelta(days=1)
+        with patch.object(facility_app, "facility_today", return_value=reference_date):
+            self.assertEqual(
+                facility_app.booking_window_end(),
+                window_end,
+            )
+            availability = self.client.get(
+                "/api/booking-availability"
+                f"?start={reference_date.isoformat()}&end={outside_window_date.isoformat()}"
+            )
+            last_day_booking = self.client.post(
+                "/api/bookings",
+                data=self.booking_data({
+                    **self.slot,
+                    "date": last_bookable_date.isoformat(),
+                }),
+            )
+            outside_window_booking = self.client.post(
+                "/api/bookings",
+                data=self.booking_data({
+                    **self.slot,
+                    "date": outside_window_date.isoformat(),
+                }),
+            )
+        self.assertEqual(availability.status_code, 200)
+        availability_data = availability.get_json()
+        self.assertTrue(any(
+            item["date"] == outside_window_date.isoformat()
+            and item["reason"] == "booking_window"
+            for item in availability_data["unavailable"]
+        ))
+        next_sunday = reference_date
+        while next_sunday.weekday() != 6:
+            next_sunday += timedelta(days=1)
+        self.assertTrue(any(
+            item["date"] == next_sunday.isoformat()
+            and item["reason"] == "weekend"
+            for item in availability_data["unavailable"]
+        ))
+        self.assertEqual(last_day_booking.status_code, 201, last_day_booking.get_json())
+        self.assertEqual(outside_window_booking.status_code, 400)
 
     def test_iisc_holidays_are_shown_and_blocked_but_restricted_dates_are_not(self):
         holiday_date = "2026-12-25"
