@@ -51,6 +51,45 @@
     </div>
   </section>
 
+  <section class="home-month-overview" data-home-month-overview aria-labelledby="home-month-title">
+    <div class="page-container">
+      <div class="home-month-heading">
+        <div>
+          <div class="eyebrow">LIVE FACILITY SCHEDULE</div>
+          <h2 id="home-month-title">Monthly booking overview</h2>
+          <p>See Brown Bear calendar entries and website bookings across the month.</p>
+        </div>
+        <div class="home-month-controls" aria-label="Monthly overview controls">
+          <button type="button" data-home-month-step="-1" aria-label="Previous month">←</button>
+          <strong id="home-month-label" aria-live="polite"></strong>
+          <button type="button" data-home-month-step="1" aria-label="Next month">→</button>
+          <button type="button" data-home-month-today>Today</button>
+          <button type="button" data-home-month-refresh aria-label="Refresh monthly schedule">↻ Refresh</button>
+        </div>
+      </div>
+      <div class="home-month-metrics" id="home-month-metrics" aria-label="Month at a glance"></div>
+      <div class="home-month-board">
+        <div class="home-month-weekdays" aria-hidden="true">
+          <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span>
+          <span>Fri</span><span>Sat</span><span>Sun</span>
+        </div>
+        <div class="home-month-days" id="home-month-days" role="group" aria-label="Choose a day in the monthly overview"></div>
+        <div class="home-month-detail" id="home-month-detail" aria-live="polite">
+          <div><span class="eyebrow">SELECTED DAY</span><h3 id="home-month-selected-date">Loading monthly schedule…</h3></div>
+          <div id="home-month-events" class="home-month-events"></div>
+        </div>
+      </div>
+      <div class="home-month-footer">
+        <div class="home-month-legend">
+          <span><i class="home-month-legend-live"></i>Brown Bear entries</span>
+          <span><i class="home-month-legend-portal"></i>Website bookings</span>
+        </div>
+        <p id="home-month-status" role="status" aria-live="polite">Syncing live schedule…</p>
+        <a href="booking.html">Book a session →</a>
+      </div>
+    </div>
+  </section>
+
   <section class="home-contact page-container">
     <div class="contact-icon">◎</div>
     <div><div class="eyebrow">CONTACT THE FACILITY</div><h2>Ready to plan an experiment?</h2><p>Tell us what you need and the facility team will help you choose a suitable instrument.</p></div>
@@ -60,5 +99,6 @@
 <script src="js/site-shell.js"></script>
 <script src="js/main.js"></script>
 <script src="js/site-events.js"></script>
+<script src="js/home-month-chart.js"></script>
 </body>
 </html>
