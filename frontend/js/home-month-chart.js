@@ -88,6 +88,7 @@ if (homeMonthOverview) {
   }
 
   function renderMetrics() {
+    if (!metricsContainer) return;
     const year = visibleMonth.getFullYear();
     const month = visibleMonth.getMonth();
     const monthDays = monthDayNumbers(year, month);
