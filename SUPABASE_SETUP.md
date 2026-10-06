@@ -42,10 +42,22 @@ Install dependencies from `backend/requirements.txt` and configure these as
 | `FLASK_SECRET_KEY` | A long random secret that remains unchanged across deployments and restarts. |
 | `BOOKING_ADMIN_PASSWORD` | A unique, strong admin password stored only in the host's secret settings. |
 | `BOOKING_COOKIE_SECURE` | `true` for the hosted HTTPS site. |
+| `SMTP_HOST` | SMTP provider hostname for booking notifications. |
+| `SMTP_PORT` | SMTP port; defaults to `587` for STARTTLS. |
+| `SMTP_USE_SSL` | `false` for STARTTLS on port `587`; set `true` for implicit TLS (usually port `465`). |
+| `SMTP_USERNAME` | SMTP account username. |
+| `SMTP_PASSWORD` | SMTP account password or provider-issued app password. |
+| `SMTP_FROM_EMAIL` | Verified sender address accepted by the SMTP provider. |
+| `ADMIN_NOTIFICATION_EMAIL` | Facility address that receives new booking requests. |
+
+Use [`.env.mail.example`](./.env.mail.example) as a list of mail variable names
+and placeholder values. Enter the real values directly in Render's Environment
+settings; the example file is not loaded automatically and contains no secrets.
+Verify mail delivery with the SMTP provider's test tools and a test booking.
 
 The Supabase URL, service-role key, database URL, Flask key, and admin password
-must not be committed to the repository. Start from [`.env.example`](./.env.example)
-for variable names only; do not copy its placeholders into production.
+must not be committed to the repository. Use [`.env.mail.example`](./.env.mail.example)
+for mail variable names only; do not copy its placeholders into production.
 
 ### Render deployment check
 

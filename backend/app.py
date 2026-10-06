@@ -2325,6 +2325,7 @@ class BrownBearCalendarParser(HTMLParser):
                 None,
             )
             self.event = {
+                "date": None,
                 "time": "",
                 "title": "",
                 "instrument": (
@@ -2336,6 +2337,19 @@ class BrownBearCalendarParser(HTMLParser):
             self.capture = ("time", [])
         elif tag == "div" and self.event is not None and "EventLink" in classes:
             self.capture = ("title", [])
+        elif (
+            tag == "a"
+            and self.event is not None
+            and self.capture is not None
+            and self.capture[0] == "title"
+        ):
+            href = attributes.get("href", "")
+            match = re.search(
+                r"PopupWindow\s*\([^,]+,\s*['\"](\d{4})[-/](\d{2})[-/](\d{2})['\"]",
+                href,
+            )
+            if match:
+                self.event["date"] = "-".join(match.groups())
 
     def handle_data(self, data):
         if self.capture is not None:
@@ -2368,11 +2382,14 @@ class BrownBearCalendarParser(HTMLParser):
                 self.day_row_count += 1
                 for header, cell in zip(self.header_cells, self.row["cells"]):
                     date_value = header["date"]
-                    if date_value:
-                        self.events.extend(
-                            {"date": date_value, **event}
-                            for event in cell["events"]
-                        )
+                    self.events.extend(
+                        {
+                            **event,
+                            "date": event["date"] or date_value,
+                        }
+                        for event in cell["events"]
+                        if event["date"] or date_value
+                    )
             self.row = None
             return
 

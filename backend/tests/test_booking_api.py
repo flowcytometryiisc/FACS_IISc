@@ -408,6 +408,49 @@ class BookingApiTests(unittest.TestCase):
         self.assertEqual(conflict.status_code, 409)
         self.assertIn("facility calendar", conflict.get_json()["error"])
 
+    def test_brown_bear_event_date_blocks_the_matching_instrument_slot(self):
+        calendar_html = b"""
+        <table class="CalBlock">
+          <tr class="DayHeaderRow">
+            <td class="DayHeader"><a href="?Op=ShowDay;Date=2026-10-06">6</a></td>
+          </tr>
+          <tr class="DayRow"><td>
+            <div class="CalEvent c_SYMPHONY">
+              <div class="TimeLabel">2:00 PM - 3:00 PM</div>
+              <div class="EventLink"><a href="JavaScript:PopupWindow ('flow_cytometry', '2026/10/07', '123456789', '', '250', '350')">Aagosh/DPN</a></div>
+            </div>
+          </td></tr>
+        </table>
+        """
+        symphony_slot = {
+            "instrument": "Symphony A1",
+            "date": "2026-10-07",
+            "time": "14:00-15:00",
+        }
+        with patch.object(
+            facility_app,
+            "urlopen",
+            return_value=self.calendar_response(calendar_html),
+        ):
+            availability = self.client.get(
+                "/api/booking-availability?start=2026-10-07&end=2026-10-07"
+            )
+            booking = self.client.post(
+                "/api/bookings", data=self.booking_data(symphony_slot)
+            )
+
+        self.assertEqual(availability.status_code, 200)
+        matching = [
+            slot for slot in availability.get_json()["booked"]
+            if slot["instrument"] == "Symphony A1"
+        ]
+        self.assertEqual(
+            [(slot["date"], slot["time"], slot["title"]) for slot in matching],
+            [("2026-10-07", "14:00-15:00", "Aagosh/DPN")],
+        )
+        self.assertEqual(booking.status_code, 409)
+        self.assertIn("facility calendar", booking.get_json()["error"])
+
     def test_booking_rechecks_brown_bear_after_availability_was_loaded(self):
         event = {
             "date": self.slot["date"],
