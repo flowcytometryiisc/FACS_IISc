@@ -1068,7 +1068,7 @@ def get_booking_availability():
     connection = booking_connection()
     try:
         rows = connection.execute(
-            "SELECT slots, status FROM bookings WHERE status IN ('pending', 'confirmed')"
+            "SELECT user_name, slots, status FROM bookings WHERE status IN ('pending', 'confirmed')"
         ).fetchall()
         closures = calendar_closures_between(connection, start_date, end_date)
     finally:
@@ -1112,9 +1112,10 @@ def get_booking_availability():
                         ),
                     ),
                     "source": "portal",
+                    "userName": row["user_name"],
                     "title": (
-                        "Portal booking · Under review"
-                        if row["status"] == "pending" else "Portal booking"
+                        f"{row['user_name']} · Under review"
+                        if row["status"] == "pending" else row["user_name"]
                     ),
                     "status": row["status"],
                 })
@@ -2514,7 +2515,7 @@ def get_calendar():
         connection = booking_connection()
         try:
             rows = connection.execute(
-                "SELECT slots, status FROM bookings WHERE status IN ('pending', 'confirmed')"
+                "SELECT user_name, slots, status FROM bookings WHERE status IN ('pending', 'confirmed')"
             ).fetchall()
             closures = calendar_closures_between(
                 connection, month_start_date, month_end_date
@@ -2540,12 +2541,13 @@ def get_calendar():
                     "date": slot["date"],
                     "time": slot["time"],
                     "title": (
-                        "Portal booking · Under review"
-                        if row["status"] == "pending" else "Portal booking"
+                        f"{row['user_name']} · Under review"
+                        if row["status"] == "pending" else row["user_name"]
                     ),
                     "instrument": slot["instrument"],
                     "color": slot.get("color", instrument_colors.get(slot["instrument"], "gray")),
                     "source": "portal",
+                    "userName": row["user_name"],
                 })
     result = jsonify({
         "month": month,

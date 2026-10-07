@@ -146,3 +146,5 @@ expose the application server directly when trusting forwarded headers.
 For Supabase-backed hosting, follow [SUPABASE_SETUP.md](./SUPABASE_SETUP.md);
 the server uses Supabase PostgreSQL and a private Storage bucket when
 `DATABASE_URL` is configured, and retains SQLite for local development.
+Names on all pending and confirmed portal bookings are displayed on the public
+schedule and booking availability calendar.

@@ -79,9 +79,9 @@ if (homeMonthOverview) {
         color: event.color || "neutral",
       })),
       ...portalSlots.filter(slot => slot.date === date).map(slot => ({
-        source: "Portal booking",
+        source: `Portal booking · ${slot.instrument}`,
         time: slot.time.replace("-", " – "),
-        title: slot.instrument,
+        title: slot.userName,
         color: slot.color || instruments.find(instrument => instrument.name === slot.instrument)?.color || "gray",
       })),
     ];

@@ -110,7 +110,8 @@ class BookingApiTests(unittest.TestCase):
         self.assertEqual(booked_slot["color"], "purple")
         self.assertEqual(booked_slot["source"], "portal")
         self.assertEqual(booked_slot["status"], "pending")
-        self.assertEqual(booked_slot["title"], "Portal booking · Under review")
+        self.assertEqual(booked_slot["userName"], "Alex Researcher")
+        self.assertEqual(booked_slot["title"], "Alex Researcher · Under review")
         calendar = self.client.get(
             f"/api/calendar?month={self.slot['date'][:7]}"
         ).get_json()
@@ -118,8 +119,8 @@ class BookingApiTests(unittest.TestCase):
             event for event in calendar["events"] if event["source"] == "portal"
         ]
         self.assertEqual(len(portal_events), 1)
-        self.assertEqual(portal_events[0]["title"], "Portal booking · Under review")
-        self.assertNotIn("Alex Researcher", json.dumps(portal_events))
+        self.assertEqual(portal_events[0]["userName"], "Alex Researcher")
+        self.assertEqual(portal_events[0]["title"], "Alex Researcher · Under review")
         conflict = self.client.post("/api/bookings", data=self.booking_data())
         self.assertEqual(conflict.status_code, 409)
 
@@ -564,6 +565,64 @@ class BookingApiTests(unittest.TestCase):
         self.assertEqual(updated.get_json()["booking"]["email"], "updated@example.edu")
         self.assertEqual(updated.get_json()["booking"]["notes"], "Updated notes")
         self.assertEqual(updated.get_json()["booking"]["slots"][0]["date"], new_date.isoformat())
+
+    def test_admin_created_booking_appears_in_public_calendar_and_availability(self):
+        self.sign_in()
+        slot = {
+            "instrument": "CytoFLEX LX",
+            "date": "2026-10-30",
+            "time": "14:00-15:00",
+        }
+        created = self.client.post(
+            "/api/admin/bookings",
+            json={
+                "userName": "Shradha",
+                "piName": "Dr. Example",
+                "phone": "+91 98765 43210",
+                "email": "shradha@example.edu",
+                "department": "Biological Sciences",
+                "specimen": "Cell suspension",
+                "notes": "Manual booking",
+                "slots": [slot],
+            },
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(created.get_json()["booking"]["status"], "confirmed")
+
+        calendar = self.client.get("/api/calendar?month=2026-10").get_json()
+        calendar_bookings = [
+            event for event in calendar["events"]
+            if event["source"] == "portal"
+            and event["date"] == "2026-10-30"
+            and event["instrument"] == "CytoFLEX LX"
+        ]
+        self.assertEqual(len(calendar_bookings), 1)
+        self.assertEqual(calendar_bookings[0]["time"], "14:00-15:00")
+        self.assertEqual(calendar_bookings[0]["title"], "Shradha")
+        self.assertEqual(calendar_bookings[0]["userName"], "Shradha")
+
+        availability = self.client.get(
+            "/api/booking-availability?start=2026-10-01&end=2026-10-31"
+        ).get_json()
+        self.assertIn(
+            {
+                "instrument": "CytoFLEX LX",
+                "date": "2026-10-30",
+                "time": "14:00-15:00",
+                "source": "portal",
+                "status": "confirmed",
+                "userName": "Shradha",
+            },
+            [
+                {key: item[key] for key in (
+                    "instrument", "date", "time", "source", "status", "userName"
+                )}
+                for item in availability["booked"]
+                if item.get("date") == "2026-10-30"
+                and item.get("instrument") == "CytoFLEX LX"
+            ],
+        )
 
     def test_admin_reschedule_rejects_brown_bear_conflict(self):
         created = self.client.post("/api/bookings", data=self.booking_data())

@@ -162,7 +162,7 @@ if (bookingPortal) {
           : booked
             ? existingBooking.source === "calendar"
               ? "Booked · Facility calendar"
-              : existingBooking.status === "pending" ? "Booked · Under review" : "Booked · Portal"
+              : `Booked · ${existingBooking.userName}${existingBooking.status === "pending" ? " · Under review" : ""}`
             : selected
               ? "Selected"
               : selectableCleaning
