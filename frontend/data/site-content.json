@@ -44,27 +44,6 @@
         "title": "Professor",
         "department": "Developmental Biology and Genetics",
         "profile": "https://dbg.iisc.ac.in/people/annapoorni-rangarajan"
-      },
-      {
-        "name": "Prof. Ganesh Nagaraju",
-        "role": "Member",
-        "title": "Professor",
-        "department": "Department of Biochemistry",
-        "profile": "https://biochem.iisc.ac.in/ganesh-nagaraju.php"
-      },
-      {
-        "name": "Prof. Patrick D' Silva",
-        "role": "Member",
-        "title": "Professor",
-        "department": "Department of Biochemistry",
-        "profile": "https://biochem.iisc.ac.in/patrick-d-silva.php"
-      },
-      {
-        "name": "Prof. Amit Singh",
-        "role": "Member",
-        "title": "Professor",
-        "department": "Department of Microbiology and Cell Biology / Centre for Infectious Disease Research",
-        "profile": "https://mcb.iisc.ac.in/research-single/amit-singh"
       }
     ],
     "staff": [
