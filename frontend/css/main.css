@@ -1165,7 +1165,7 @@ main section[id],main [id]{scroll-margin-top:28px}
 .hero-art{opacity:.58}
 .page-hero[class*="hero-"]{background-repeat:no-repeat;background-position:center;background-size:cover}
 .page-hero.hero-about{background-image:linear-gradient(90deg,rgba(3,24,50,.84),rgba(5,35,70,.54)),url("../assets/images/site/iis-campus.jpg")}
-.page-hero.hero-people{background-image:linear-gradient(90deg,rgba(3,23,49,.9) 0%,rgba(5,33,68,.78) 42%,rgba(5,33,68,.34) 100%),url("../assets/images/site/team-banner.jpg")}
+.page-hero.hero-people{background-image:linear-gradient(90deg,rgba(3,23,49,.9) 0%,rgba(5,33,68,.78) 42%,rgba(5,33,68,.34) 100%),url("../assets/images/site/cytometer-lab.jpg")}
 .page-hero.hero-instruments{background-image:linear-gradient(90deg,rgba(2,23,49,.86),rgba(4,32,68,.54)),url("../assets/images/site/cytometer-lab.jpg")}
 .page-hero.hero-services{background-image:linear-gradient(90deg,rgba(3,23,49,.86),rgba(5,32,66,.56)),url("../assets/images/site/cell-biology.jpg")}
 .page-hero.hero-analysis{background-image:linear-gradient(90deg,rgba(3,23,49,.87),rgba(5,30,64,.55)),url("../assets/images/site/cytometry-plots.jpg")}
