@@ -103,6 +103,15 @@ def add_security_headers(response):
 BOOKING_DATABASE = BASE / "backend" / "instance" / "bookings.sqlite3"
 BOOKING_UPLOADS = BASE / "backend" / "instance" / "booking-forms"
 SUPABASE_STORAGE_BUCKET = os.environ.get("SUPABASE_STORAGE_BUCKET", "booking-forms")
+WORKSHOP_IMAGE_BUCKET = os.environ.get("WORKSHOP_IMAGE_BUCKET", "workshop-images")
+WORKSHOP_UPLOADS = BASE / "backend" / "instance" / "workshop-images"
+ARCHIVED_WORKSHOP_ID = "past-workshop"
+ARCHIVED_WORKSHOP_SUMMARY = (
+    "Two days of sessions exploring fundamental principles and dynamic applications "
+    "of flow cytometry, including immunophenotyping, with an in-depth look at the "
+    "Beckman Coulter CytoFLEX LX Flow Cytometer."
+)
+MAX_WORKSHOP_IMAGE_SIZE = 5 * 1024 * 1024
 BOOKING_SLOTS = (
     "10:00-11:00",
     "11:00-12:00",
@@ -237,10 +246,34 @@ def booking_connection():
             description TEXT NOT NULL,
             link_label TEXT NOT NULL,
             link_url TEXT NOT NULL,
+            image_path TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
     """)
+    event_columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(facility_events)")
+    }
+    if "image_path" not in event_columns:
+        connection.execute("ALTER TABLE facility_events ADD COLUMN image_path TEXT")
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS facility_workshop_archive (
+            id TEXT PRIMARY KEY,
+            summary TEXT NOT NULL,
+            image_path TEXT,
+            updated_at TEXT NOT NULL
+        )
+    """)
+    connection.execute(
+        """INSERT OR IGNORE INTO facility_workshop_archive
+           (id, summary, image_path, updated_at) VALUES (?, ?, NULL, ?)""",
+        (
+            ARCHIVED_WORKSHOP_ID,
+            ARCHIVED_WORKSHOP_SUMMARY,
+            datetime.now(timezone.utc).isoformat(),
+        ),
+    )
+    connection.commit()
     schema_row = connection.execute(
         "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'bookings'"
     ).fetchone()
@@ -349,22 +382,25 @@ def use_supabase_storage():
     return bool(os.environ.get("DATABASE_URL"))
 
 
-def supabase_storage_request(method, object_key, content=None, content_type=None, upsert=False):
+def supabase_storage_request(
+    method, object_key, content=None, content_type=None, upsert=False, bucket=None
+):
     supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    storage_bucket = bucket or SUPABASE_STORAGE_BUCKET
     if not supabase_url or not service_key:
         raise SupabaseStorageError(
             "Supabase Storage requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY."
         )
     encoded_key = quote(object_key, safe="/")
     if method == "DELETE":
-        endpoint = f"{supabase_url}/storage/v1/object/{quote(SUPABASE_STORAGE_BUCKET, safe='')}"
+        endpoint = f"{supabase_url}/storage/v1/object/{quote(storage_bucket, safe='')}"
         body = json.dumps({"prefixes": [object_key]}).encode("utf-8")
         request_type = "application/json"
     else:
         endpoint = (
             f"{supabase_url}/storage/v1/object/"
-            f"{quote(SUPABASE_STORAGE_BUCKET, safe='')}/{encoded_key}"
+            f"{quote(storage_bucket, safe='')}/{encoded_key}"
         )
         body = content
         request_type = content_type or "application/octet-stream"
@@ -385,7 +421,7 @@ def supabase_storage_request(method, object_key, content=None, content_type=None
     except (HTTPError, URLError, TimeoutError, OSError) as error:
         app.logger.exception("Supabase Storage request failed")
         raise SupabaseStorageError(
-            "The uploaded facility form could not be stored or retrieved."
+            "The facility file could not be stored or retrieved."
         ) from error
 
 
@@ -436,6 +472,60 @@ def read_booking_form(form_path):
         app.logger.error("Stored user form is missing or outside the upload directory")
         return None
     return local_path.read_bytes()
+
+
+def detect_workshop_image(content):
+    if content.startswith(b"\xff\xd8\xff"):
+        return ".jpg", "image/jpeg"
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png", "image/png"
+    if len(content) >= 12 and content[:4] == b"RIFF" and content[8:12] == b"WEBP":
+        return ".webp", "image/webp"
+    return None, None
+
+
+def store_workshop_image(object_key, content, content_type):
+    if use_supabase_storage():
+        supabase_storage_request(
+            "POST",
+            object_key,
+            content,
+            content_type,
+            bucket=WORKSHOP_IMAGE_BUCKET,
+        )
+        return object_key
+    local_path = (WORKSHOP_UPLOADS / object_key).resolve()
+    if WORKSHOP_UPLOADS.resolve() not in local_path.parents:
+        raise OSError("Refusing to store a workshop image outside the upload directory.")
+    local_path.parent.mkdir(parents=True, exist_ok=True)
+    local_path.write_bytes(content)
+    return object_key
+
+
+def read_workshop_image(object_key):
+    if use_supabase_storage():
+        return supabase_storage_request(
+            "GET", object_key, bucket=WORKSHOP_IMAGE_BUCKET
+        )
+    local_path = (WORKSHOP_UPLOADS / object_key).resolve()
+    if WORKSHOP_UPLOADS.resolve() not in local_path.parents or not local_path.is_file():
+        return None
+    return local_path.read_bytes()
+
+
+def remove_workshop_image(object_key):
+    if not object_key:
+        return
+    if use_supabase_storage():
+        supabase_storage_request(
+            "DELETE", object_key, bucket=WORKSHOP_IMAGE_BUCKET
+        )
+        return
+    local_path = (WORKSHOP_UPLOADS / object_key).resolve()
+    if WORKSHOP_UPLOADS.resolve() not in local_path.parents:
+        raise OSError("Refusing to remove a workshop image outside the upload directory.")
+    if local_path.is_file():
+        local_path.unlink()
 
 
 def slots_from_row(row):
@@ -683,6 +773,9 @@ def facility_event_row(row):
         "description": row["description"],
         "linkLabel": row["link_label"],
         "linkUrl": row["link_url"],
+        "imageUrl": (
+            f"/api/workshop-images/{row['id']}" if row["image_path"] else None
+        ),
         "createdAt": row["created_at"],
         "updatedAt": row["updated_at"],
     }
@@ -1649,6 +1742,7 @@ def create_admin_event():
     event_row = {
         **event,
         "id": f"EV-{secrets.token_hex(8).upper()}",
+        "imageUrl": None,
         "createdAt": now,
         "updatedAt": now,
     }
@@ -1718,6 +1812,216 @@ def update_admin_event(event_id):
     finally:
         connection.close()
     return jsonify({"event": facility_event_row(row)})
+
+
+def workshop_content_payload(summary, previous_image_path, owner_id, remove_photo):
+    if not isinstance(summary, str) or not summary.strip() or len(summary.strip()) > 240:
+        return None, None, "Enter a workshop summary of no more than 240 characters."
+    photo = request.files.get("photo")
+    if remove_photo and photo and photo.filename:
+        return None, None, "Choose a new photo or remove the current photo, not both."
+
+    image_path = previous_image_path
+    content_type = None
+    image_content = None
+    if remove_photo:
+        image_path = None
+    elif photo and photo.filename:
+        image_content = photo.read(MAX_WORKSHOP_IMAGE_SIZE + 1)
+        if len(image_content) > MAX_WORKSHOP_IMAGE_SIZE:
+            return None, None, "Workshop photos must be 5 MB or smaller."
+        extension, content_type = detect_workshop_image(image_content)
+        if not extension:
+            return None, None, "Upload a JPEG, PNG, or WebP image."
+        image_path = f"workshops/{owner_id}/{secrets.token_hex(16)}{extension}"
+    return {
+        "summary": summary.strip(),
+        "imagePath": image_path,
+        "imageContent": image_content,
+        "contentType": content_type,
+    }, previous_image_path, None
+
+
+def workshop_content_response(summary, image_path):
+    return {
+        "summary": summary,
+        "imageUrl": f"/api/workshop-images/archive" if image_path else None,
+    }
+
+
+@app.get("/api/admin/workshop-content")
+def get_admin_workshop_content():
+    denied = require_admin()
+    if denied:
+        return denied
+    connection = booking_connection()
+    try:
+        archive_row = connection.execute(
+            "SELECT summary, image_path FROM facility_workshop_archive WHERE id = ?",
+            (ARCHIVED_WORKSHOP_ID,),
+        ).fetchone()
+        event_rows = connection.execute(
+            """SELECT * FROM facility_events WHERE end_date >= ?
+               ORDER BY start_date, created_at DESC""",
+            (facility_today().isoformat(),),
+        ).fetchall()
+    finally:
+        connection.close()
+    response = jsonify({
+        "archive": {
+            "id": ARCHIVED_WORKSHOP_ID,
+            "title": "Basics of Flow Cytometry and Immunophenotyping",
+            **workshop_content_response(
+                archive_row["summary"], archive_row["image_path"]
+            ),
+        },
+        "events": [facility_event_row(row) for row in event_rows],
+    })
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.put("/api/admin/workshop-content/archive")
+def update_admin_workshop_archive():
+    denied = require_admin()
+    if denied:
+        return denied
+    connection = booking_connection()
+    try:
+        archive_row = connection.execute(
+            "SELECT image_path FROM facility_workshop_archive WHERE id = ?",
+            (ARCHIVED_WORKSHOP_ID,),
+        ).fetchone()
+        if not archive_row:
+            return jsonify({"error": "Archived workshop content was not found."}), 404
+        previous_path = archive_row["image_path"]
+    finally:
+        connection.close()
+    content, previous_path, error = workshop_content_payload(
+        request.form.get("summary"),
+        previous_path,
+        ARCHIVED_WORKSHOP_ID,
+        request.form.get("removePhoto") == "true",
+    )
+    if error:
+        return jsonify({"error": error}), 400
+    if content["imageContent"] is not None:
+        try:
+            store_workshop_image(
+                content["imagePath"],
+                content["imageContent"],
+                content["contentType"],
+            )
+        except SupabaseStorageError as storage_error:
+            return jsonify({"error": str(storage_error)}), 502
+        except OSError as storage_error:
+            app.logger.exception("Unable to save archived workshop photo")
+            return jsonify({"error": "The workshop photo could not be saved."}), 500
+    connection = booking_connection()
+    try:
+        connection.execute(
+            """UPDATE facility_workshop_archive
+               SET summary = ?, image_path = ?, updated_at = ? WHERE id = ?""",
+            (
+                content["summary"],
+                content["imagePath"],
+                datetime.now(timezone.utc).isoformat(),
+                ARCHIVED_WORKSHOP_ID,
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    cleanup_warning = None
+    if previous_path and previous_path != content["imagePath"]:
+        try:
+            remove_workshop_image(previous_path)
+        except (SupabaseStorageError, OSError):
+            app.logger.exception("Unable to remove replaced archived workshop photo")
+            cleanup_warning = (
+                "The workshop was updated, but its previous photo could not be removed."
+            )
+    return jsonify({
+        "archive": {
+            "id": ARCHIVED_WORKSHOP_ID,
+            "title": "Basics of Flow Cytometry and Immunophenotyping",
+            **workshop_content_response(content["summary"], content["imagePath"]),
+        },
+        "warning": cleanup_warning,
+    })
+
+
+@app.put("/api/admin/workshop-content/<event_id>")
+def update_admin_workshop_event_content(event_id):
+    denied = require_admin()
+    if denied:
+        return denied
+    connection = booking_connection()
+    try:
+        row = connection.execute(
+            "SELECT * FROM facility_events WHERE id = ?", (event_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "The workshop was not found."}), 404
+        previous_path = row["image_path"]
+    finally:
+        connection.close()
+
+    remove_photo = request.form.get("removePhoto") == "true"
+    content, _, error = workshop_content_payload(
+        request.form.get("summary"),
+        previous_path,
+        event_id,
+        remove_photo,
+    )
+    if error:
+        return jsonify({"error": error}), 400
+    if content["imageContent"] is not None:
+        try:
+            store_workshop_image(
+                content["imagePath"],
+                content["imageContent"],
+                content["contentType"],
+            )
+        except SupabaseStorageError as storage_error:
+            return jsonify({"error": str(storage_error)}), 502
+        except OSError:
+            app.logger.exception("Unable to save workshop photo")
+            return jsonify({"error": "The workshop photo could not be saved."}), 500
+    connection = booking_connection()
+    try:
+        cursor = connection.execute(
+            """UPDATE facility_events SET summary = ?, image_path = ?, updated_at = ?
+               WHERE id = ?""",
+            (
+                content["summary"],
+                content["imagePath"],
+                datetime.now(timezone.utc).isoformat(),
+                event_id,
+            ),
+        )
+        if cursor.rowcount == 0:
+            connection.rollback()
+            return jsonify({"error": "The workshop was not found."}), 404
+        connection.commit()
+        updated = connection.execute(
+            "SELECT * FROM facility_events WHERE id = ?", (event_id,)
+        ).fetchone()
+    finally:
+        connection.close()
+    cleanup_warning = None
+    if previous_path and previous_path != content["imagePath"]:
+        try:
+            remove_workshop_image(previous_path)
+        except (SupabaseStorageError, OSError):
+            app.logger.exception("Unable to remove replaced workshop photo")
+            cleanup_warning = (
+                "The workshop was updated, but its previous photo could not be removed."
+            )
+    return jsonify({
+        "workshop": facility_event_row(updated),
+        "warning": cleanup_warning,
+    })
 
 
 @app.delete("/api/admin/events/<event_id>")
@@ -2463,6 +2767,63 @@ def get_public_events():
     finally:
         connection.close()
     response = jsonify({"events": [facility_event_row(row) for row in rows]})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/api/workshops/archive")
+def get_archived_workshop_content():
+    connection = booking_connection()
+    try:
+        row = connection.execute(
+            "SELECT summary, image_path FROM facility_workshop_archive WHERE id = ?",
+            (ARCHIVED_WORKSHOP_ID,),
+        ).fetchone()
+    finally:
+        connection.close()
+    response = jsonify(workshop_content_response(row["summary"], row["image_path"]))
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/api/workshop-images/<owner_id>")
+def get_workshop_image(owner_id):
+    if owner_id == "archive":
+        connection = booking_connection()
+        try:
+            row = connection.execute(
+                "SELECT image_path FROM facility_workshop_archive WHERE id = ?",
+                (ARCHIVED_WORKSHOP_ID,),
+            ).fetchone()
+        finally:
+            connection.close()
+    else:
+        connection = booking_connection()
+        try:
+            row = connection.execute(
+                "SELECT image_path FROM facility_events WHERE id = ?",
+                (owner_id,),
+            ).fetchone()
+        finally:
+            connection.close()
+    if not row or not row["image_path"]:
+        return jsonify({"error": "The workshop photo was not found."}), 404
+    try:
+        content = read_workshop_image(row["image_path"])
+    except SupabaseStorageError as error:
+        return jsonify({"error": str(error)}), 502
+    if content is None:
+        return jsonify({"error": "The workshop photo was not found."}), 404
+    _, content_type = detect_workshop_image(content)
+    if not content_type:
+        app.logger.error("Stored workshop photo has an unsupported image format")
+        return jsonify({"error": "The workshop photo could not be read."}), 500
+    response = send_file(
+        io.BytesIO(content),
+        mimetype=content_type,
+        download_name=f"workshop-photo{Path(row['image_path']).suffix}",
+        max_age=0,
+    )
     response.headers["Cache-Control"] = "no-store"
     return response
 

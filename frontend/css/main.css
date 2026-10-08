@@ -2046,3 +2046,25 @@ main section[id],main [id]{scroll-margin-top:28px}
   .home-event-ticker-group:first-child{width:max-content}
   .upcoming-event-card{transition:none}
 }
+
+.admin-dashboard-cards{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.admin-dashboard-card-icon.workshop-content{background:#fff3e5;color:#ad6421}
+.admin-workshop-content-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:14px}
+.admin-workshop-content-card{min-width:0;padding:16px;border:1px solid #dce7f0;border-radius:13px;background:#fff}
+.admin-workshop-content-heading{display:flex;align-items:center;gap:13px;margin-bottom:14px}
+.admin-workshop-photo-preview,.admin-workshop-photo-empty{width:96px;height:72px;flex:none;border-radius:8px;object-fit:cover;background:#f1f6fa}
+.admin-workshop-photo-empty{display:grid;place-items:center;padding:8px;color:#73899b;font-size:9px;text-align:center}
+.admin-workshop-content-heading h4{margin:4px 0 0;color:#173b59;font:800 14px/1.35 Manrope,Inter,sans-serif}
+.admin-workshop-content-form{display:grid;gap:11px}
+.admin-workshop-content-form>label{display:grid;gap:5px;color:#294863;font-size:10px;font-weight:700}
+.admin-workshop-content-form textarea,.admin-workshop-content-form input[type=file]{width:100%;padding:9px 10px;border:1px solid #d5e1eb;border-radius:8px;background:#fff;color:#25445f;font:500 11px/1.5 Inter,Arial,sans-serif}
+.admin-workshop-content-form textarea{resize:vertical}
+.admin-workshop-content-form small{color:#7b8fa2;font-size:9px;font-weight:500}
+.admin-workshop-content-form .admin-workshop-remove-photo{display:flex;align-items:center;gap:7px;font-weight:500}
+.admin-workshop-content-form .admin-status{min-height:0;margin:0;font-size:10px}
+.admin-workshop-content-form .btn{justify-self:start;min-height:36px;padding:8px 12px;font-size:10px}
+.workshop-archive-photo,.upcoming-event-photo{display:block;width:100%;max-width:560px;max-height:300px;margin:10px 0 14px;border-radius:10px;object-fit:cover}
+.upcoming-event-photo{margin:0 0 12px}
+@media(max-width:760px){
+  .admin-workshop-content-list{grid-template-columns:1fr}
+}

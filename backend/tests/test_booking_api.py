@@ -25,8 +25,12 @@ class BookingApiTests(unittest.TestCase):
         self.uploads_patch = patch.object(
             facility_app, "BOOKING_UPLOADS", storage_path / "booking-forms"
         )
+        self.workshop_uploads_patch = patch.object(
+            facility_app, "WORKSHOP_UPLOADS", storage_path / "workshop-images"
+        )
         self.database_patch.start()
         self.uploads_patch.start()
+        self.workshop_uploads_patch.start()
         self.calendar_response_patch = patch.object(
             facility_app,
             "urlopen",
@@ -53,6 +57,7 @@ class BookingApiTests(unittest.TestCase):
 
     def tearDown(self):
         self.password_patch.stop()
+        self.workshop_uploads_patch.stop()
         self.uploads_patch.stop()
         self.database_patch.stop()
         self.calendar_response_patch.stop()
@@ -1343,6 +1348,133 @@ class BookingApiTests(unittest.TestCase):
         admin_events = self.client.get("/api/admin/events").get_json()["events"]
         self.assertEqual(len(admin_events), 1)
         self.assertEqual(admin_events[0]["title"], "Past seminar")
+
+    def test_admin_can_update_workshop_summary_and_photo(self):
+        self.assertEqual(
+            self.client.get("/api/admin/workshop-content").status_code, 401
+        )
+        archive = self.client.get("/api/workshops/archive").get_json()
+        self.assertEqual(archive["summary"], facility_app.ARCHIVED_WORKSHOP_SUMMARY)
+        self.assertIsNone(archive["imageUrl"])
+
+        self.sign_in()
+        workshop_payload = {
+            "category": "workshop",
+            "title": "Introduction to Flow Cytometry",
+            "startDate": self.slot["date"],
+            "endDate": self.slot["date"],
+            "summary": "A hands-on facility workshop.",
+            "description": "Learn cytometry fundamentals and instrument setup.",
+            "linkLabel": "View workshop brochure",
+            "linkUrl": "https://example.edu/workshops/flow-cytometry.pdf",
+        }
+        created = self.client.post(
+            "/api/admin/events",
+            json=workshop_payload,
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(created.status_code, 201)
+        workshop_id = created.get_json()["event"]["id"]
+        managed_content = self.client.get(
+            "/api/admin/workshop-content"
+        ).get_json()
+        self.assertEqual(
+            [item["id"] for item in managed_content["events"]],
+            [workshop_id],
+        )
+
+        workshop_photo = b"\x89PNG\r\n\x1a\nworkshop-image"
+        updated = self.client.put(
+            f"/api/admin/workshop-content/{workshop_id}",
+            data={
+                "summary": "Updated workshop summary.",
+                "photo": (io.BytesIO(workshop_photo), "workshop.png"),
+            },
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(updated.status_code, 200)
+        event = self.client.get("/api/events").get_json()["events"][0]
+        self.assertEqual(event["summary"], "Updated workshop summary.")
+        self.assertEqual(event["imageUrl"], f"/api/workshop-images/{workshop_id}")
+        photo_response = self.client.get(event["imageUrl"])
+        self.assertEqual(photo_response.status_code, 200)
+        self.assertEqual(photo_response.mimetype, "image/png")
+        self.assertEqual(photo_response.data, workshop_photo)
+
+        invalid_photo = self.client.put(
+            f"/api/admin/workshop-content/{workshop_id}",
+            data={
+                "summary": "Valid summary.",
+                "photo": (io.BytesIO(b"not an image"), "workshop.txt"),
+            },
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(invalid_photo.status_code, 400)
+
+        archive_photo = b"\xff\xd8\xffarchived-photo"
+        archive_update = self.client.put(
+            "/api/admin/workshop-content/archive",
+            data={
+                "summary": "Updated archive summary.",
+                "photo": (io.BytesIO(archive_photo), "archive.jpg"),
+            },
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(archive_update.status_code, 200)
+        archive = self.client.get("/api/workshops/archive").get_json()
+        self.assertEqual(archive["summary"], "Updated archive summary.")
+        self.assertEqual(archive["imageUrl"], "/api/workshop-images/archive")
+        archive_image = self.client.get(archive["imageUrl"])
+        self.assertEqual(archive_image.mimetype, "image/jpeg")
+        self.assertEqual(archive_image.data, archive_photo)
+
+        remove_photo = self.client.put(
+            "/api/admin/workshop-content/archive",
+            data={
+                "summary": "Summary without a photo.",
+                "removePhoto": "true",
+            },
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(remove_photo.status_code, 200)
+        self.assertIsNone(
+            self.client.get("/api/workshops/archive").get_json()["imageUrl"]
+        )
+        self.assertEqual(
+            self.client.get("/api/workshop-images/archive").status_code, 404
+        )
+
+    def test_existing_local_event_database_gains_workshop_image_column(self):
+        connection = sqlite3.connect(facility_app.BOOKING_DATABASE)
+        try:
+            connection.execute(
+                """CREATE TABLE facility_events (
+                    id TEXT PRIMARY KEY,
+                    category TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    start_date TEXT NOT NULL,
+                    end_date TEXT NOT NULL,
+                    summary TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    link_label TEXT NOT NULL,
+                    link_url TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )"""
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        response = self.client.get("/api/events")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {"events": []})
+        archive = self.client.get("/api/workshops/archive")
+        self.assertEqual(archive.status_code, 200)
+        self.assertEqual(
+            archive.get_json()["summary"],
+            facility_app.ARCHIVED_WORKSHOP_SUMMARY,
+        )
 
     def test_admin_login_rejects_incorrect_password(self):
         response = self.client.post("/api/admin/login", json={"password": "wrong"})

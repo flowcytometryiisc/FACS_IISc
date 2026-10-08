@@ -37,6 +37,7 @@ if (homeEventTicker || upcomingEventsSection) {
     return `<article class="upcoming-event-card ${escapeHTML(item.category)}">
       <div class="upcoming-event-date"><span>${escapeHTML(eventLabel(item))}</span><strong>${escapeHTML(eventDates(item))}</strong></div>
       <div class="upcoming-event-copy">
+        ${item.imageUrl ? `<img class="upcoming-event-photo" src="${escapeHTML(item.imageUrl)}" alt="${escapeHTML(item.title)}" loading="lazy" decoding="async">` : ""}
         <h3>${escapeHTML(item.title)}</h3>
         <p class="upcoming-event-summary">${escapeHTML(item.summary)}</p>
         <p>${escapeHTML(item.description)}</p>
@@ -73,5 +74,25 @@ if (homeEventTicker || upcomingEventsSection) {
     }
   }
 
+  async function loadWorkshopArchive() {
+    const summary = document.querySelector("#workshop-archive-summary");
+    const photo = document.querySelector("#workshop-archive-photo");
+    if (!summary || !photo) return;
+    try {
+      const response = await fetch("/api/workshops/archive", { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Archived workshop content could not be loaded.");
+      if (typeof payload.summary !== "string") throw new Error("The archived workshop response was invalid.");
+      summary.textContent = payload.summary;
+      if (payload.imageUrl) {
+        photo.src = payload.imageUrl;
+        photo.hidden = false;
+      }
+    } catch (error) {
+      console.error("Unable to load archived workshop content.", error);
+    }
+  }
+
   void loadFacilityEvents();
+  void loadWorkshopArchive();
 }
