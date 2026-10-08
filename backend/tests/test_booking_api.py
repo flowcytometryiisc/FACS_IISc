@@ -960,6 +960,24 @@ class BookingApiTests(unittest.TestCase):
         )
         self.assertEqual(sunday_response.status_code, 400)
 
+    def test_supabase_booking_session_schema_allows_saturdays(self):
+        migration_dir = Path(__file__).resolve().parents[2] / "supabase" / "migrations"
+        initial_schema = (
+            migration_dir / "20260930120000_facility_booking_storage.sql"
+        ).read_text(encoding="utf-8")
+        saturday_migration = (
+            migration_dir / "20261007130000_allow_saturday_booking_sessions.sql"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "check (extract(isodow from session_date) between 1 and 6)",
+            initial_schema,
+        )
+        self.assertIn(
+            "check (extract(isodow from session_date) between 1 and 6)",
+            saturday_migration,
+        )
+
     def test_booking_window_reaches_the_end_of_next_month_only(self):
         reference_date = facility_app.facility_today()
         window_end = facility_app.booking_window_end(reference_date)

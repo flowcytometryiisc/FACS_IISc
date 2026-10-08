@@ -10,13 +10,19 @@ the database URL or service-role key.
 1. Create a Supabase project in the region closest to the facility (choose the
    nearest supported India region if available).
 2. Keep a separate Supabase project for development and production.
-3. Open **SQL Editor** in the production project and run
-   [`supabase/migrations/20260930120000_facility_booking_storage.sql`](./supabase/migrations/20260930120000_facility_booking_storage.sql).
-4. Confirm the migration creates `bookings`, `booking_sessions`,
-   `booking_audit_log`, `instruments`, and the private `booking-forms` bucket.
-   The tables have RLS enabled and no `anon`/`authenticated` table grants. Only
-   the backend's trusted database connection and Storage service role should
-   access booking information and forms.
+3. Open **SQL Editor** in the production project and run every SQL file in
+   [`supabase/migrations`](./supabase/migrations/) in filename order. In
+   particular, `20261001090000_booking_approval_workflow.sql` must be applied:
+   the initial schema migration only allows `confirmed` and `cancelled`, while
+   new booking requests are saved with status `pending`. Omitting the approval
+   migration makes submissions fail when the database rejects that status.
+4. Confirm the migrations create `bookings`, `booking_sessions`,
+   `booking_audit_log`, `calendar_closures`, `facility_events`,
+   `facility_workshop_archive`, `instruments`, and the private
+   `booking-forms` and `workshop-images` buckets. The tables have RLS enabled
+   and no `anon`/`authenticated` table grants. Only the backend's trusted
+   database connection and Storage service role should access booking
+   information, forms, and workshop photos.
 
 The schema keeps the current booking API compatible while maintaining a
 normalized session table. PostgreSQL enforces that confirmed sessions for the
@@ -68,8 +74,12 @@ set, the app requires both `SUPABASE_URL` and
 `SUPABASE_SERVICE_ROLE_KEY` for Supabase-backed persistence, followed by a
 persistent `FLASK_SECRET_KEY`. Save the settings and redeploy the service.
 
-Run the SQL migration in that same Supabase project before using bookings. After
-the deployment is live, `https://<your-service>.onrender.com/api/health`
+Run all SQL migrations in that same Supabase project, in filename order, before
+using bookings. If a submission reports "The booking could not be saved," check
+the service logs for a database constraint error and confirm that
+`20261001090000_booking_approval_workflow.sql` has been applied; it enables the
+`pending` status required for new booking requests. After the deployment is
+live, `https://<your-service>.onrender.com/api/health`
 should return HTTP 200 with status `ok` and persistence `supabase`, and
 `/api/calendar?month=YYYY-MM` should return HTTP 200. Brown Bear entries remain
 available from that calendar endpoint if persistence is temporarily

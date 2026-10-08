@@ -1625,7 +1625,7 @@ main section[id],main [id]{scroll-margin-top:28px}
 .home-month-controls button{min-width:34px;min-height:34px;padding:6px 10px;border:1px solid #d8e4ee;border-radius:8px;background:#fff;color:#315773;font-size:11px;font-weight:700;cursor:pointer}
 .home-month-controls button:hover:not(:disabled){border-color:#82b5df;background:#f5faff}
 .home-month-controls button:disabled{opacity:.5;cursor:wait}
-.home-month-controls strong{min-width:116px;color:#183c5a;font:800 13px Manrope,Inter,sans-serif;text-align:center}
+.home-month-controls strong{min-width:154px;padding:8px 13px;border:1px solid #c9e1f4;border-radius:9px;background:linear-gradient(135deg,#e8f5ff,#f1edff);box-shadow:0 2px 7px rgba(29,91,145,.08);color:#075ea8;font:800 17px/1.2 Manrope,Inter,sans-serif;letter-spacing:-.25px;text-align:center}
 .home-month-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px;margin-bottom:13px}
 .home-month-metric{display:flex;align-items:center;justify-content:space-between;gap:9px;min-height:59px;padding:10px 14px;border:1px solid #e1eaf2;border-radius:10px;background:#fff}
 .home-month-metric span{color:#72869a;font-size:10px;font-weight:600}
@@ -1705,7 +1705,7 @@ main section[id],main [id]{scroll-margin-top:28px}
   .home-month-overview{padding:28px 0}
   .home-month-heading{align-items:flex-start;flex-direction:column;gap:13px}
   .home-month-controls{width:100%;justify-content:space-between;gap:4px}
-  .home-month-controls strong{flex:1;min-width:0}
+  .home-month-controls strong{flex:1;min-width:0;padding:8px 6px;font-size:15px}
   .home-month-controls button{padding-inline:8px}
   .home-month-metrics{gap:6px}
   .home-month-metric{align-items:flex-start;min-height:67px;flex-direction:column;justify-content:center;gap:5px;padding:8px}

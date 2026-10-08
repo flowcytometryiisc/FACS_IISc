@@ -60,7 +60,8 @@ create table if not exists public.booking_sessions (
     status text not null check (status in ('confirmed', 'cancelled')),
     created_at timestamptz not null default now(),
     check (ends_at > starts_at),
-    check (extract(isodow from session_date) between 1 and 5)
+    constraint booking_sessions_session_date_weekday_check
+        check (extract(isodow from session_date) between 1 and 6)
 );
 
 create index if not exists booking_sessions_date_idx
