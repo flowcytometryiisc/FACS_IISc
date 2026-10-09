@@ -441,8 +441,8 @@ footer{padding:10px 0 8px;background:#041f40;color:#c1d0e1}
 .workshop-page-tab:hover,.workshop-page-tab.active{color:#126eae}
 .workshop-page-tab.active:after{position:absolute;right:10px;bottom:-1px;left:10px;height:3px;border-radius:3px 3px 0 0;background:#1680c5;content:""}
 .gallery-tab-panel[hidden]{display:none}
-.event-gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:16px}
-.event-gallery-card{overflow:hidden;border:1px solid #e0e9f0;border-radius:13px;background:#fff;box-shadow:0 8px 22px rgba(20,55,88,.055)}
+.event-gallery-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));justify-items:center;gap:16px}
+.event-gallery-card{width:100%;max-width:520px;overflow:hidden;border:1px solid #e0e9f0;border-radius:13px;background:#fff;box-shadow:0 8px 22px rgba(20,55,88,.055)}
 .event-gallery-card img{display:block;width:100%;aspect-ratio:4/3;object-fit:contain;object-position:center;background:#f1f6fa}
 .event-gallery-card-details{display:grid;gap:5px;padding:12px 14px}
 .event-gallery-card h3{margin:0;color:#173b59;font:800 15px/1.35 Manrope,Inter,sans-serif}
