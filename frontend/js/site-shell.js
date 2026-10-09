@@ -39,6 +39,7 @@ siteMain.className = "site-main";
 main.before(sidebar);
 main.before(siteMain);
 siteMain.append(main);
+document.body.append(sidebar.querySelector(".sidebar-admin-link"));
 sidebar.addEventListener("mouseenter", () => document.body.classList.add("sidebar-expanded"));
 sidebar.addEventListener("mouseleave", () => {
   if (!sidebar.matches(":focus-within")) document.body.classList.remove("sidebar-expanded");

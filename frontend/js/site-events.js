@@ -77,18 +77,13 @@ if (homeEventTicker || upcomingEventsSection || eventGallery) {
 
   async function loadWorkshopArchive() {
     const summary = document.querySelector("#workshop-archive-summary");
-    const photo = document.querySelector("#workshop-archive-photo");
-    if (!summary || !photo) return;
+    if (!summary) return;
     try {
       const response = await fetch("/api/workshops/archive", { cache: "no-store" });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Archived workshop content could not be loaded.");
       if (typeof payload.summary !== "string") throw new Error("The archived workshop response was invalid.");
       summary.textContent = payload.summary;
-      if (payload.imageUrl) {
-        photo.src = payload.imageUrl;
-        photo.hidden = false;
-      }
     } catch (error) {
       console.error("Unable to load archived workshop content.", error);
     }

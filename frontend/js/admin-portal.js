@@ -36,8 +36,6 @@ if (adminPortal) {
   const eventFormStatus = adminPortal.querySelector("#admin-event-form-status");
   const eventFormTitle = adminPortal.querySelector("#admin-event-form-title");
   const eventCancelEditButton = adminPortal.querySelector("#admin-event-cancel-edit");
-  const workshopContentList = adminPortal.querySelector("#admin-workshop-content-list");
-  const workshopContentStatus = adminPortal.querySelector("#admin-workshop-content-status");
   const galleryList = adminPortal.querySelector("#admin-gallery-list");
   const galleryStatus = adminPortal.querySelector("#admin-gallery-status");
   const galleryUploadForm = adminPortal.querySelector("#admin-gallery-upload-form");
@@ -56,8 +54,6 @@ if (adminPortal) {
   let currentCalendarEvents = [];
   let calendarClosures = [];
   let facilityEvents = [];
-  let workshopArchive = null;
-  let eventContentItems = [];
   let galleryItems = [];
   let pendingRemoval = null;
   let calendarFetchedAt = "";
@@ -85,7 +81,6 @@ if (adminPortal) {
     const workspaces = {
       bookings: ["Bookings", "Review requests, manage bookings, and sync the facility calendar."],
       events: ["Events & workshops", "Publish facility announcements and manage calendar closures."],
-      "workshop-content": ["Event & workshop content", "Update event and workshop summaries and photos shown on the public website."],
       gallery: ["Gallery updates", "Upload and manage workshop and event photos shown in the public Gallery tab."],
       statistics: ["Usage statistics", "Explore monthly facility activity and demand."],
     };
@@ -106,7 +101,6 @@ if (adminPortal) {
     if (viewName === "statistics") {
       document.dispatchEvent(new Event("admin:statistics-opened"));
     }
-    if (viewName === "workshop-content") void loadWorkshopContent();
     if (viewName === "gallery") void loadGallery();
   }
 
@@ -500,79 +494,6 @@ if (adminPortal) {
     facilityEvents = payload.events;
     renderFacilityEvents();
   }
-
-  function renderWorkshopContentItem(item, archive = false) {
-    const dates = archive ? "Past workshop" : `${formatDate(item.startDate)}${item.endDate === item.startDate ? "" : ` – ${formatDate(item.endDate)}`}`;
-    const preview = item.imageUrl
-      ? `<img class="admin-workshop-photo-preview" src="${escapeHTML(item.imageUrl)}" alt="${escapeHTML(item.title)} photo" loading="lazy">`
-      : '<div class="admin-workshop-photo-empty">No photo uploaded</div>';
-    return `<article class="admin-workshop-content-card">
-      <div class="admin-workshop-content-heading">${preview}<div><span class="eyebrow">${escapeHTML(dates)}</span><h4>${escapeHTML(item.title)}</h4></div></div>
-      <form class="admin-workshop-content-form" data-workshop-content-form="${archive ? "archive" : escapeHTML(item.id)}">
-        <label>Event or workshop summary<textarea name="summary" maxlength="240" rows="3" required>${escapeHTML(item.summary)}</textarea></label>
-        <label>Photo<input type="file" name="photo" accept="image/jpeg,image/png,image/webp"><small>JPEG, PNG, or WebP. Maximum 5 MB.</small></label>
-        ${item.imageUrl ? '<label class="admin-workshop-remove-photo"><input type="checkbox" name="removePhoto" value="true"> Remove current photo</label>' : ""}
-        <p class="admin-status" data-workshop-content-status role="status" aria-live="polite"></p>
-        <button class="btn primary" type="submit">Save workshop content</button>
-      </form>
-    </article>`;
-  }
-
-  function renderWorkshopContent() {
-    const content = [];
-    if (workshopArchive) content.push(renderWorkshopContentItem(workshopArchive, true));
-    content.push(...eventContentItems.map(item => renderWorkshopContentItem(item)));
-    workshopContentList.innerHTML = content.length
-      ? content.join("")
-      : '<p class="admin-status">No published workshops are available to edit.</p>';
-  }
-
-  async function loadWorkshopContent() {
-    workshopContentStatus.textContent = "Loading workshop content…";
-    try {
-      const payload = await fetchJSON(`${apiBase}/admin/workshop-content`, { cache: "no-store" });
-      workshopArchive = payload.archive;
-      eventContentItems = payload.events;
-      renderWorkshopContent();
-      workshopContentStatus.textContent = "";
-    } catch (error) {
-      workshopContentStatus.textContent = error.message;
-    }
-  }
-
-  workshopContentList.addEventListener("submit", async event => {
-    const form = event.target.closest("[data-workshop-content-form]");
-    if (!form) return;
-    event.preventDefault();
-    if (!form.reportValidity()) return;
-    const submitButton = form.querySelector('[type="submit"]');
-    const status = form.querySelector("[data-workshop-content-status]");
-    const target = form.dataset.workshopContentForm;
-    submitButton.disabled = true;
-    status.textContent = "Saving workshop content…";
-    try {
-      const payload = await fetchJSON(target === "archive"
-        ? `${apiBase}/admin/workshop-content/archive`
-        : `${apiBase}/admin/workshop-content/${encodeURIComponent(target)}`, {
-        method: "PUT",
-        body: new FormData(form),
-      });
-      await loadWorkshopContent();
-      dashboardStatus.textContent = payload.warning
-        || "Event or workshop summary and photo updated on the public website.";
-      void loadFacilityEvents().catch(error => {
-        dashboardStatus.textContent = `Content was saved, but the event list could not refresh: ${error.message}`;
-      });
-    } catch (error) {
-      status.textContent = error.message;
-    } finally {
-      submitButton.disabled = false;
-    }
-  });
-
-  adminPortal.querySelector("#admin-workshop-content-refresh").addEventListener("click", () => {
-    void loadWorkshopContent();
-  });
 
   function renderGallery() {
     galleryList.innerHTML = galleryItems.length
