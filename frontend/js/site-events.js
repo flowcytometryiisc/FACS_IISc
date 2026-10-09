@@ -110,28 +110,32 @@ if (homeEventTicker || upcomingEventsSection || eventGallery) {
     }
   }
 
-  function selectWorkshopTab(gallerySelected) {
-    document.querySelector("#workshops-tab").setAttribute("aria-selected", String(!gallerySelected));
-    document.querySelector("#gallery-tab").setAttribute("aria-selected", String(gallerySelected));
-    document.querySelector("#workshops-tab").classList.toggle("active", !gallerySelected);
-    document.querySelector("#gallery-tab").classList.toggle("active", gallerySelected);
-    document.querySelector("#workshops-tab-panel").hidden = gallerySelected;
-    document.querySelector("#gallery-tab-panel").hidden = !gallerySelected;
-  }
+  const workshopsTab = document.querySelector("#workshops-tab");
+  const galleryTab = document.querySelector("#gallery-tab");
+  if (workshopsTab && galleryTab) {
+    function selectWorkshopTab(gallerySelected) {
+      workshopsTab.setAttribute("aria-selected", String(!gallerySelected));
+      galleryTab.setAttribute("aria-selected", String(gallerySelected));
+      workshopsTab.classList.toggle("active", !gallerySelected);
+      galleryTab.classList.toggle("active", gallerySelected);
+      document.querySelector("#workshops-tab-panel").hidden = gallerySelected;
+      document.querySelector("#gallery-tab-panel").hidden = !gallerySelected;
+    }
 
-  document.querySelectorAll(".workshop-page-tab").forEach(tab => {
-    tab.addEventListener("click", () => {
-      const gallerySelected = tab.id === "gallery-tab";
-      if (document.querySelector("#gallery-tab").getAttribute("aria-selected") === String(gallerySelected)) return;
-      selectWorkshopTab(gallerySelected);
-      const tabHash = gallerySelected ? "#gallery" : "";
-      window.history.pushState(null, "", `${window.location.pathname}${window.location.search}${tabHash}`);
+    document.querySelectorAll(".workshop-page-tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        const gallerySelected = tab.id === "gallery-tab";
+        if (galleryTab.getAttribute("aria-selected") === String(gallerySelected)) return;
+        selectWorkshopTab(gallerySelected);
+        const tabHash = gallerySelected ? "#gallery" : "";
+        window.history.pushState(null, "", `${window.location.pathname}${window.location.search}${tabHash}`);
+      });
     });
-  });
-  window.addEventListener("popstate", () => {
+    window.addEventListener("popstate", () => {
+      selectWorkshopTab(window.location.hash === "#gallery");
+    });
     selectWorkshopTab(window.location.hash === "#gallery");
-  });
-  selectWorkshopTab(window.location.hash === "#gallery");
+  }
 
   void loadFacilityEvents();
   void loadWorkshopArchive();

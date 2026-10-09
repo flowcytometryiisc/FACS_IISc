@@ -160,9 +160,7 @@ if (bookingPortal) {
             : unavailableReason?.type === "workshop"
               ? `Workshop holiday · ${unavailableReason.remark}`
           : booked
-            ? existingBooking.source === "calendar"
-              ? "Booked · Facility calendar"
-              : `Booked · ${existingBooking.userName}${existingBooking.status === "pending" ? " · Under review" : ""}`
+            ? existingBooking.title || "Booked · Facility calendar"
             : selected
               ? "Selected"
               : selectableCleaning
@@ -179,7 +177,7 @@ if (bookingPortal) {
                     ? "Not bookable"
                     : unavailable ? "Unavailable" : "Available";
         const disabled = booked || cleaning || unavailable || availabilityRefreshing;
-        const button = `<button type="button" class="booking-time-slot${selected ? " selected" : ""}${booked ? " booked" : ""}${cleaning ? " cleaning" : ""}${unavailable ? " unavailable" : ""}" data-slot-key="${key}" ${disabled ? "disabled" : ""} aria-pressed="${selected}"><span>${formatTimeSlot(time)}</span><small>${escapeHTML(availabilityRefreshing && !booked && !cleaning && !unavailable ? "Checking…" : status)}</small></button>`;
+        const button = `<button type="button" class="booking-time-slot${selected ? " selected" : ""}${booked ? " booked" : ""}${cleaning ? " cleaning" : ""}${unavailable ? " unavailable" : ""}" data-instrument-color="${instrument.color || "gray"}" data-slot-key="${key}" ${disabled ? "disabled" : ""} aria-pressed="${selected}" aria-label="${formatTimeSlot(time)} · ${escapeHTML(status)}"><span>${formatTimeSlot(time)}</span><small>${escapeHTML(availabilityRefreshing && !booked && !cleaning && !unavailable ? "Checking…" : status)}</small></button>`;
         return button;
       }).join("");
       return `<section class="booking-instrument-slots" data-instrument-color="${instrument.color || "gray"}"><h4>${name} · ${instrument.type}</h4><div class="booking-time-grid">${timeOptions}</div></section>`;
@@ -231,7 +229,12 @@ if (bookingPortal) {
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
       })[character]);
       const instrument = instruments.find(item => item.name === slot.instrument);
-      return `<div class="booking-selected-item" data-instrument-color="${instrument?.color || "gray"}"><span><strong>${name}</strong><small>${formatDate(slot.date, { weekday: "short", day: "numeric", month: "short" })} · ${formatTimeSlot(slot.time)}</small></span><button type="button" data-remove-slot="${slotKey(slot)}" aria-label="Remove ${name} session">×</button></div>`;
+      const dateLabel = formatDate(slot.date, { weekday: "short", day: "numeric", month: "short" });
+      return `<article class="booking-selected-item" data-instrument-color="${instrument?.color || "gray"}">
+        <div class="booking-selected-item-heading"><time datetime="${slot.date}">${dateLabel}</time><span>Selected</span></div>
+        <strong class="booking-selected-item-time">${formatTimeSlot(slot.time)}</strong>
+        <div class="booking-selected-item-footer"><small>${name}</small><button type="button" data-remove-slot="${escapeHTML(slotKey(slot))}" aria-label="Remove ${name} session on ${dateLabel} at ${formatTimeSlot(slot.time)}">×</button></div>
+      </article>`;
     }).join("");
     selectionSummary.textContent = `${slots.length} session${slots.length === 1 ? "" : "s"} selected · Slots will be held while staff review your request.`;
     selectedList.querySelectorAll("[data-remove-slot]").forEach(button => {

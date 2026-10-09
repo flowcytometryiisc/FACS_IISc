@@ -415,22 +415,24 @@ class BookingApiTests(unittest.TestCase):
         self.assertIn("facility calendar", conflict.get_json()["error"])
 
     def test_brown_bear_event_date_blocks_the_matching_instrument_slot(self):
-        calendar_html = b"""
+        event_date = self.slot["date"]
+        calendar_date = event_date.replace("-", "/")
+        calendar_html = f"""
         <table class="CalBlock">
           <tr class="DayHeaderRow">
-            <td class="DayHeader"><a href="?Op=ShowDay;Date=2026-10-06">6</a></td>
+            <td class="DayHeader"><a href="?Op=ShowDay;Date={event_date}">6</a></td>
           </tr>
           <tr class="DayRow"><td>
             <div class="CalEvent c_SYMPHONY">
               <div class="TimeLabel">2:00 PM - 3:00 PM</div>
-              <div class="EventLink"><a href="JavaScript:PopupWindow ('flow_cytometry', '2026/10/07', '123456789', '', '250', '350')">Aagosh/DPN</a></div>
+              <div class="EventLink"><a href="JavaScript:PopupWindow ('flow_cytometry', '{calendar_date}', '123456789', '', '250', '350')">Aagosh/DPN</a></div>
             </div>
           </td></tr>
         </table>
-        """
+        """.encode()
         symphony_slot = {
             "instrument": "Symphony A1",
-            "date": "2026-10-07",
+            "date": event_date,
             "time": "14:00-15:00",
         }
         with patch.object(
@@ -439,7 +441,7 @@ class BookingApiTests(unittest.TestCase):
             return_value=self.calendar_response(calendar_html),
         ):
             availability = self.client.get(
-                "/api/booking-availability?start=2026-10-07&end=2026-10-07"
+                f"/api/booking-availability?start={event_date}&end={event_date}"
             )
             booking = self.client.post(
                 "/api/bookings", data=self.booking_data(symphony_slot)
@@ -452,7 +454,7 @@ class BookingApiTests(unittest.TestCase):
         ]
         self.assertEqual(
             [(slot["date"], slot["time"], slot["title"]) for slot in matching],
-            [("2026-10-07", "14:00-15:00", "Aagosh/DPN")],
+            [(event_date, "14:00-15:00", "Aagosh/DPN")],
         )
         self.assertEqual(booking.status_code, 409)
         self.assertIn("facility calendar", booking.get_json()["error"])
@@ -501,8 +503,11 @@ class BookingApiTests(unittest.TestCase):
         self.assertEqual(len(portal_events), 1)
         self.assertEqual(portal_events[0]["bookingId"], booking_id)
 
-        replacement_date = facility_app.facility_today() + timedelta(days=2)
-        while replacement_date.weekday() >= 5:
+        replacement_date = date.fromisoformat(self.slot["date"]) + timedelta(days=1)
+        while (
+            replacement_date.weekday() >= 5
+            or facility_app.iisc_holiday_for_date(replacement_date.isoformat())
+        ):
             replacement_date += timedelta(days=1)
         replacement_slot = {
             **self.slot,
