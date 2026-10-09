@@ -110,17 +110,28 @@ if (homeEventTicker || upcomingEventsSection || eventGallery) {
     }
   }
 
+  function selectWorkshopTab(gallerySelected) {
+    document.querySelector("#workshops-tab").setAttribute("aria-selected", String(!gallerySelected));
+    document.querySelector("#gallery-tab").setAttribute("aria-selected", String(gallerySelected));
+    document.querySelector("#workshops-tab").classList.toggle("active", !gallerySelected);
+    document.querySelector("#gallery-tab").classList.toggle("active", gallerySelected);
+    document.querySelector("#workshops-tab-panel").hidden = gallerySelected;
+    document.querySelector("#gallery-tab-panel").hidden = !gallerySelected;
+  }
+
   document.querySelectorAll(".workshop-page-tab").forEach(tab => {
     tab.addEventListener("click", () => {
       const gallerySelected = tab.id === "gallery-tab";
-      document.querySelector("#workshops-tab").setAttribute("aria-selected", String(!gallerySelected));
-      document.querySelector("#gallery-tab").setAttribute("aria-selected", String(gallerySelected));
-      document.querySelector("#workshops-tab").classList.toggle("active", !gallerySelected);
-      document.querySelector("#gallery-tab").classList.toggle("active", gallerySelected);
-      document.querySelector("#workshops-tab-panel").hidden = gallerySelected;
-      document.querySelector("#gallery-tab-panel").hidden = !gallerySelected;
+      if (document.querySelector("#gallery-tab").getAttribute("aria-selected") === String(gallerySelected)) return;
+      selectWorkshopTab(gallerySelected);
+      const tabHash = gallerySelected ? "#gallery" : "";
+      window.history.pushState(null, "", `${window.location.pathname}${window.location.search}${tabHash}`);
     });
   });
+  window.addEventListener("popstate", () => {
+    selectWorkshopTab(window.location.hash === "#gallery");
+  });
+  selectWorkshopTab(window.location.hash === "#gallery");
 
   void loadFacilityEvents();
   void loadWorkshopArchive();
