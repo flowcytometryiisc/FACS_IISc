@@ -267,12 +267,27 @@ def booking_connection():
     connection.execute("""
         CREATE TABLE IF NOT EXISTS facility_gallery_items (
             id TEXT PRIMARY KEY,
+            event_name TEXT NOT NULL DEFAULT 'Event photo',
+            event_date TEXT,
             description TEXT NOT NULL,
             image_path TEXT NOT NULL,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
     """)
+    gallery_columns = {
+        row["name"] for row in connection.execute(
+            "PRAGMA table_info(facility_gallery_items)"
+        )
+    }
+    if "event_name" not in gallery_columns:
+        connection.execute(
+            "ALTER TABLE facility_gallery_items ADD COLUMN event_name TEXT NOT NULL DEFAULT 'Event photo'"
+        )
+    if "event_date" not in gallery_columns:
+        connection.execute(
+            "ALTER TABLE facility_gallery_items ADD COLUMN event_date TEXT"
+        )
     connection.execute(
         """INSERT OR IGNORE INTO facility_workshop_archive
            (id, summary, image_path, updated_at) VALUES (?, ?, NULL, ?)""",
@@ -1861,6 +1876,8 @@ def workshop_content_response(summary, image_path):
 def gallery_item_row(row):
     return {
         "id": row["id"],
+        "eventName": row["event_name"],
+        "eventDate": row["event_date"],
         "description": row["description"],
         "imageUrl": f"/api/gallery-images/{row['id']}",
         "createdAt": row["created_at"],
@@ -2065,7 +2082,13 @@ def create_admin_gallery_item():
     denied = require_admin()
     if denied:
         return denied
+    event_name = request.form.get("eventName", "")
+    event_date = request.form.get("eventDate", "")
     description = request.form.get("description", "")
+    if not event_name.strip() or len(event_name.strip()) > 120:
+        return jsonify({"error": "Enter an event name of no more than 120 characters."}), 400
+    if not valid_gallery_date(event_date):
+        return jsonify({"error": "Choose a valid event date."}), 400
     if not description.strip() or len(description.strip()) > 240:
         return jsonify({
             "error": "Enter a short description of no more than 240 characters."
@@ -2096,9 +2119,9 @@ def create_admin_gallery_item():
         connection = booking_connection()
         connection.execute(
             """INSERT INTO facility_gallery_items
-               (id, description, image_path, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?)""",
-            (item_id, description.strip(), image_path, now, now),
+               (id, event_name, event_date, description, image_path, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (item_id, event_name.strip(), event_date, description.strip(), image_path, now, now),
         )
         connection.commit()
         row = connection.execute(
@@ -2115,6 +2138,103 @@ def create_admin_gallery_item():
         if connection is not None:
             connection.close()
     return jsonify({"item": gallery_item_row(row)}), 201
+
+
+def valid_gallery_date(value):
+    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        return False
+    try:
+        return date.fromisoformat(value).isoformat() == value
+    except ValueError:
+        return False
+
+
+@app.put("/api/admin/gallery/<item_id>")
+def update_admin_gallery_item(item_id):
+    denied = require_admin()
+    if denied:
+        return denied
+    event_name = request.form.get("eventName", "")
+    event_date = request.form.get("eventDate", "")
+    description = request.form.get("description", "")
+    if not event_name.strip() or len(event_name.strip()) > 120:
+        return jsonify({"error": "Enter an event name of no more than 120 characters."}), 400
+    if not valid_gallery_date(event_date):
+        return jsonify({"error": "Choose a valid event date."}), 400
+    if not description.strip() or len(description.strip()) > 240:
+        return jsonify({
+            "error": "Enter a short description of no more than 240 characters."
+        }), 400
+
+    connection = booking_connection()
+    try:
+        row = connection.execute(
+            "SELECT image_path FROM facility_gallery_items WHERE id = ?", (item_id,)
+        ).fetchone()
+    finally:
+        connection.close()
+    if not row:
+        return jsonify({"error": "The gallery photo was not found."}), 404
+
+    previous_path = row["image_path"]
+    image_path = previous_path
+    photo = request.files.get("photo")
+    if photo and photo.filename:
+        image_content = photo.read(MAX_WORKSHOP_IMAGE_SIZE + 1)
+        if len(image_content) > MAX_WORKSHOP_IMAGE_SIZE:
+            return jsonify({"error": "Gallery photos must be 5 MB or smaller."}), 400
+        extension, content_type = detect_workshop_image(image_content)
+        if not extension:
+            return jsonify({"error": "Upload a JPEG, PNG, or WebP image."}), 400
+        image_path = f"gallery/{item_id}/{secrets.token_hex(16)}{extension}"
+        try:
+            store_workshop_image(image_path, image_content, content_type)
+        except SupabaseStorageError as storage_error:
+            return jsonify({"error": str(storage_error)}), 502
+        except OSError:
+            app.logger.exception("Unable to save replacement gallery photo")
+            return jsonify({"error": "The gallery photo could not be saved."}), 500
+
+    connection = None
+    try:
+        connection = booking_connection()
+        connection.execute(
+            """UPDATE facility_gallery_items
+               SET event_name = ?, event_date = ?, description = ?, image_path = ?,
+                   updated_at = ? WHERE id = ?""",
+            (
+                event_name.strip(),
+                event_date,
+                description.strip(),
+                image_path,
+                datetime.now(timezone.utc).isoformat(),
+                item_id,
+            ),
+        )
+        connection.commit()
+        updated = connection.execute(
+            "SELECT * FROM facility_gallery_items WHERE id = ?", (item_id,)
+        ).fetchone()
+    except (BookingDatabaseError, sqlite3.Error):
+        app.logger.exception("Unable to update gallery item")
+        if image_path != previous_path:
+            try:
+                remove_workshop_image(image_path)
+            except (SupabaseStorageError, OSError):
+                app.logger.exception("Unable to clean up an unlisted replacement gallery photo")
+        return jsonify({"error": "The gallery item could not be updated."}), 500
+    finally:
+        if connection is not None:
+            connection.close()
+
+    warning = None
+    if image_path != previous_path:
+        try:
+            remove_workshop_image(previous_path)
+        except (SupabaseStorageError, OSError):
+            app.logger.exception("Unable to remove replaced gallery photo")
+            warning = "Gallery details were updated, but the previous photo could not be removed."
+    return jsonify({"item": gallery_item_row(updated), "warning": warning})
 
 
 @app.delete("/api/admin/gallery/<item_id>")

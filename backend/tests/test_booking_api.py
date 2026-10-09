@@ -1468,10 +1468,15 @@ class BookingApiTests(unittest.TestCase):
         self.sign_in()
 
         photo = b"\x89PNG\r\n\x1a\ngallery-photo"
+        gallery_metadata = {
+            "eventName": "Flow Cytometry Workshop",
+            "eventDate": self.slot["date"],
+            "description": "Workshop participants",
+        }
         unauthorized = self.client.post(
             "/api/admin/gallery",
             data={
-                "description": "Workshop participants",
+                **gallery_metadata,
                 "photo": (io.BytesIO(photo), "gallery.png"),
             },
         )
@@ -1479,23 +1484,32 @@ class BookingApiTests(unittest.TestCase):
 
         missing_photo = self.client.post(
             "/api/admin/gallery",
-            data={"description": "Workshop participants"},
+            data=gallery_metadata,
             headers=self.admin_headers(),
         )
         self.assertEqual(missing_photo.status_code, 400)
         invalid_description = self.client.post(
             "/api/admin/gallery",
             data={
-                "description": " ",
+                **{**gallery_metadata, "description": " "},
                 "photo": (io.BytesIO(photo), "gallery.png"),
             },
             headers=self.admin_headers(),
         )
         self.assertEqual(invalid_description.status_code, 400)
+        invalid_date = self.client.post(
+            "/api/admin/gallery",
+            data={
+                **{**gallery_metadata, "eventDate": "2026-02-30"},
+                "photo": (io.BytesIO(photo), "gallery.png"),
+            },
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(invalid_date.status_code, 400)
         invalid_photo = self.client.post(
             "/api/admin/gallery",
             data={
-                "description": "Workshop participants",
+                **gallery_metadata,
                 "photo": (io.BytesIO(b"not an image"), "gallery.txt"),
             },
             headers=self.admin_headers(),
@@ -1505,13 +1519,15 @@ class BookingApiTests(unittest.TestCase):
         created = self.client.post(
             "/api/admin/gallery",
             data={
-                "description": "Workshop participants",
+                **gallery_metadata,
                 "photo": (io.BytesIO(photo), "gallery.png"),
             },
             headers=self.admin_headers(),
         )
         self.assertEqual(created.status_code, 201)
         item = created.get_json()["item"]
+        self.assertEqual(item["eventName"], gallery_metadata["eventName"])
+        self.assertEqual(item["eventDate"], gallery_metadata["eventDate"])
         self.assertEqual(item["description"], "Workshop participants")
         self.assertEqual(item["imageUrl"], f"/api/gallery-images/{item['id']}")
 
@@ -1525,6 +1541,47 @@ class BookingApiTests(unittest.TestCase):
             self.client.get("/api/admin/gallery").get_json()["items"], [item]
         )
 
+        updated_details = {
+            **gallery_metadata,
+            "eventName": "Annual Cytometry Symposium",
+            "eventDate": "2026-09-14",
+            "description": "Participants at the annual symposium",
+        }
+        unauthorized_update = self.client.put(
+            f"/api/admin/gallery/{item['id']}",
+            data=updated_details,
+        )
+        self.assertEqual(unauthorized_update.status_code, 401)
+        updated = self.client.put(
+            f"/api/admin/gallery/{item['id']}",
+            data=updated_details,
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(updated.status_code, 200)
+        updated_item = updated.get_json()["item"]
+        self.assertEqual(updated_item["eventName"], updated_details["eventName"])
+        self.assertEqual(updated_item["eventDate"], updated_details["eventDate"])
+        self.assertEqual(updated_item["description"], updated_details["description"])
+        self.assertEqual(
+            self.client.get(updated_item["imageUrl"]).data, photo
+        )
+
+        replacement_photo = b"\xff\xd8\xffreplacement-gallery-photo"
+        replaced = self.client.put(
+            f"/api/admin/gallery/{item['id']}",
+            data={
+                **updated_details,
+                "photo": (io.BytesIO(replacement_photo), "replacement.jpg"),
+            },
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(replaced.status_code, 200)
+        replaced_item = replaced.get_json()["item"]
+        self.assertEqual(
+            self.client.get(replaced_item["imageUrl"]).data, replacement_photo
+        )
+        self.assertEqual(self.client.get(item["imageUrl"]).status_code, 200)
+
         deleted = self.client.delete(
             f"/api/admin/gallery/{item['id']}",
             headers=self.admin_headers(),
@@ -1532,7 +1589,7 @@ class BookingApiTests(unittest.TestCase):
         self.assertEqual(deleted.status_code, 200)
         self.assertIsNone(deleted.get_json()["warning"])
         self.assertEqual(self.client.get("/api/gallery").get_json(), {"items": []})
-        self.assertEqual(self.client.get(item["imageUrl"]).status_code, 404)
+        self.assertEqual(self.client.get(replaced_item["imageUrl"]).status_code, 404)
         self.assertEqual(
             self.client.delete(
                 f"/api/admin/gallery/{item['id']}",
@@ -1540,6 +1597,40 @@ class BookingApiTests(unittest.TestCase):
             ).status_code,
             404,
         )
+
+    def test_existing_gallery_rows_gain_event_name_and_date_columns(self):
+        connection = sqlite3.connect(facility_app.BOOKING_DATABASE)
+        try:
+            connection.execute(
+                """CREATE TABLE facility_gallery_items (
+                    id TEXT PRIMARY KEY,
+                    description TEXT NOT NULL,
+                    image_path TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )"""
+            )
+            connection.execute(
+                """INSERT INTO facility_gallery_items
+                   (id, description, image_path, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    "GL-EXISTING",
+                    "Earlier workshop photo",
+                    "gallery/GL-EXISTING/photo.png",
+                    "2026-09-01T00:00:00+00:00",
+                    "2026-09-01T00:00:00+00:00",
+                ),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        response = self.client.get("/api/gallery")
+        self.assertEqual(response.status_code, 200)
+        item = response.get_json()["items"][0]
+        self.assertEqual(item["eventName"], "Event photo")
+        self.assertIsNone(item["eventDate"])
 
     def test_existing_local_event_database_gains_workshop_image_column(self):
         connection = sqlite3.connect(facility_app.BOOKING_DATABASE)

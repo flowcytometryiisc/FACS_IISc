@@ -42,6 +42,7 @@ if (adminPortal) {
   const galleryStatus = adminPortal.querySelector("#admin-gallery-status");
   const galleryUploadForm = adminPortal.querySelector("#admin-gallery-upload-form");
   const galleryUploadStatus = adminPortal.querySelector("#admin-gallery-upload-status");
+  const galleryCancelEditButton = adminPortal.querySelector("#admin-gallery-cancel-edit");
   const brownBearAdminLink = adminPortal.querySelector("#admin-brownbear-admin");
   const editDialog = document.querySelector("#admin-edit-booking");
   const editForm = document.querySelector("#admin-edit-form");
@@ -577,9 +578,37 @@ if (adminPortal) {
     galleryList.innerHTML = galleryItems.length
       ? galleryItems.map(item => `<article class="admin-gallery-card">
           <img src="${escapeHTML(item.imageUrl)}" alt="${escapeHTML(item.description)}" loading="lazy">
-          <div><p>${escapeHTML(item.description)}</p><button class="admin-delete-button" type="button" data-gallery-delete="${escapeHTML(item.id)}">Delete photo</button></div>
+          <div><strong>${escapeHTML(item.eventName)}</strong><time datetime="${escapeHTML(item.eventDate || "")}">${item.eventDate ? escapeHTML(formatDate(item.eventDate)) : "Date not set"}</time><p>${escapeHTML(item.description)}</p><div class="admin-gallery-card-actions"><button class="admin-detail-button" type="button" data-gallery-edit="${escapeHTML(item.id)}">Edit details</button><button class="admin-delete-button" type="button" data-gallery-delete="${escapeHTML(item.id)}">Delete photo</button></div></div>
         </article>`).join("")
       : '<p class="admin-status">No photos have been added to the gallery yet.</p>';
+  }
+
+  function resetGalleryForm() {
+    galleryUploadForm.reset();
+    galleryUploadForm.elements.photo.required = true;
+    galleryUploadForm.dataset.editId = "";
+    galleryUploadForm.querySelector('[type="submit"]').textContent = "Add photo to gallery";
+    galleryCancelEditButton.hidden = true;
+    galleryUploadStatus.textContent = "";
+  }
+
+  function editGalleryItem(id) {
+    const item = galleryItems.find(galleryItem => galleryItem.id === id);
+    if (!item) {
+      galleryStatus.textContent = "This gallery photo is no longer in the list. Refresh and try again.";
+      return;
+    }
+    galleryUploadForm.elements.eventName.value = item.eventName;
+    galleryUploadForm.elements.eventDate.value = item.eventDate || "";
+    galleryUploadForm.elements.description.value = item.description;
+    galleryUploadForm.elements.photo.value = "";
+    galleryUploadForm.elements.photo.required = false;
+    galleryUploadForm.dataset.editId = item.id;
+    galleryUploadForm.querySelector('[type="submit"]').textContent = "Save gallery changes";
+    galleryCancelEditButton.hidden = false;
+    galleryUploadStatus.textContent = "Choose a new photo only if you want to replace the current one.";
+    galleryUploadForm.scrollIntoView({ behavior: "smooth", block: "center" });
+    galleryUploadForm.elements.eventName.focus({ preventScroll: true });
   }
 
   async function loadGallery() {
@@ -601,13 +630,17 @@ if (adminPortal) {
     submitButton.disabled = true;
     galleryUploadStatus.textContent = "Uploading photo…";
     try {
-      const payload = await fetchJSON(`${apiBase}/admin/gallery`, {
-        method: "POST",
+      const editId = galleryUploadForm.dataset.editId;
+      const payload = await fetchJSON(editId
+        ? `${apiBase}/admin/gallery/${encodeURIComponent(editId)}`
+        : `${apiBase}/admin/gallery`, {
+        method: editId ? "PUT" : "POST",
         body: new FormData(galleryUploadForm),
       });
-      galleryUploadForm.reset();
+      resetGalleryForm();
       await loadGallery();
-      galleryUploadStatus.textContent = payload.warning || "Photo added to the public Gallery tab.";
+      galleryUploadStatus.textContent = payload.warning
+        || (editId ? "Gallery details updated." : "Photo added to the public Gallery tab.");
     } catch (error) {
       galleryUploadStatus.textContent = error.message;
     } finally {
@@ -616,9 +649,16 @@ if (adminPortal) {
   });
 
   galleryList.addEventListener("click", event => {
+    const editButton = event.target.closest("[data-gallery-edit]");
+    if (editButton) {
+      editGalleryItem(editButton.dataset.galleryEdit);
+      return;
+    }
     const button = event.target.closest("[data-gallery-delete]");
     if (button) requestManagedItemRemoval("gallery", button.dataset.galleryDelete);
   });
+
+  galleryCancelEditButton.addEventListener("click", resetGalleryForm);
 
   adminPortal.querySelector("#admin-gallery-refresh").addEventListener("click", () => {
     void loadGallery();

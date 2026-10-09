@@ -23,6 +23,8 @@ the database URL or service-role key.
    have RLS enabled and no `anon`/`authenticated` table grants. Only the
    backend's trusted database connection and Storage service role should access
    booking information, forms, workshop photos, and event gallery photos.
+   If the gallery table was created by an earlier deployment, apply
+   `20261009153000_gallery_event_details.sql` to add event names and dates.
 
 The schema keeps the current booking API compatible while maintaining a
 normalized session table. PostgreSQL enforces that confirmed sessions for the

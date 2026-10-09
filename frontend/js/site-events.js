@@ -104,7 +104,9 @@ if (homeEventTicker || upcomingEventsSection || eventGallery) {
       eventGallery.innerHTML = payload.items.length
         ? payload.items.map(item => `<article class="event-gallery-card">
             <img src="${escapeHTML(item.imageUrl)}" alt="${escapeHTML(item.description)}" loading="lazy" decoding="async">
+            <div class="event-gallery-card-details"><h3>${escapeHTML(item.eventName)}</h3>${item.eventDate ? `<time datetime="${escapeHTML(item.eventDate)}">${escapeHTML(formatEventDate(item.eventDate))}</time>` : ""}
             <p>${escapeHTML(item.description)}</p>
+            </div>
           </article>`).join("")
         : '<p class="gallery-empty">No event photos have been added yet.</p>';
     } catch (error) {

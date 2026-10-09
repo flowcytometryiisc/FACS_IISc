@@ -99,10 +99,12 @@
       <div class="admin-dashboard-view" id="admin-gallery-view" data-admin-view-panel="gallery" hidden>
         <div class="admin-events-toolbar"><div><span class="eyebrow">EVENTS &amp; WORKSHOPS PAGE</span><h3>Gallery updates</h3><p>Upload workshop and event photos with a short description. Photos appear in the public Gallery tab.</p></div><button class="btn outline" id="admin-gallery-refresh" type="button">↻ Refresh</button></div>
         <form class="admin-gallery-upload-form" id="admin-gallery-upload-form">
+          <label>Event name<input type="text" name="eventName" maxlength="120" required placeholder="e.g. Flow Cytometry Workshop"></label>
+          <label>Event date<input type="date" name="eventDate" required></label>
           <label>Photo description<textarea name="description" maxlength="240" rows="2" required placeholder="Add a short description of this workshop or event photo"></textarea></label>
           <label>Workshop or event photo<input type="file" name="photo" accept="image/jpeg,image/png,image/webp" required><small>JPEG, PNG, or WebP. Maximum 5 MB.</small></label>
           <p id="admin-gallery-upload-status" class="admin-status" role="status" aria-live="polite"></p>
-          <button class="btn primary" type="submit">Add photo to gallery</button>
+          <div class="admin-gallery-form-actions"><button class="btn primary" type="submit">Add photo to gallery</button><button class="btn outline" type="button" id="admin-gallery-cancel-edit" hidden>Cancel edit</button></div>
         </form>
         <p id="admin-gallery-status" class="admin-status" role="status" aria-live="polite"></p>
         <div id="admin-gallery-list" class="admin-gallery-list"><p class="admin-status">Sign in to manage gallery photos.</p></div>
