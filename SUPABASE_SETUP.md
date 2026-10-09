@@ -18,11 +18,11 @@ the database URL or service-role key.
    migration makes submissions fail when the database rejects that status.
 4. Confirm the migrations create `bookings`, `booking_sessions`,
    `booking_audit_log`, `calendar_closures`, `facility_events`,
-   `facility_workshop_archive`, `instruments`, and the private
-   `booking-forms` and `workshop-images` buckets. The tables have RLS enabled
-   and no `anon`/`authenticated` table grants. Only the backend's trusted
-   database connection and Storage service role should access booking
-   information, forms, and workshop photos.
+   `facility_workshop_archive`, `facility_gallery_items`, and `instruments`;
+   and the private `booking-forms` and `workshop-images` buckets. The tables
+   have RLS enabled and no `anon`/`authenticated` table grants. Only the
+   backend's trusted database connection and Storage service role should access
+   booking information, forms, workshop photos, and event gallery photos.
 
 The schema keeps the current booking API compatible while maintaining a
 normalized session table. PostgreSQL enforces that confirmed sessions for the

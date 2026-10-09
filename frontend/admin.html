@@ -9,7 +9,7 @@
 </head>
 <body>
 <main class="inner-page">
-  <header class="page-hero hero-booking"><div class="page-container"><div class="eyebrow light">FACILITY STAFF</div><h1>Admin dashboard</h1><p>Manage bookings, publish facility events and workshops, update workshop content, and review facility usage.</p></div></header>
+  <header class="page-hero hero-booking"><div class="page-container"><div class="eyebrow light">FACILITY STAFF</div><h1>Admin dashboard</h1><p>Manage bookings, publish facility events and workshops, update workshop content and the event gallery, and review facility usage.</p></div></header>
   <section class="page-container content-section admin-portal" data-admin-portal>
     <section class="admin-login-panel booking-panel" id="admin-login-panel" aria-labelledby="admin-login-title">
       <span class="eyebrow">STAFF SIGN IN</span><h2 id="admin-login-title">Admin portal</h2><p>A fresh sign-in is required every time you open this page. Sessions end after 15 minutes of inactivity or when you leave.</p>
@@ -22,6 +22,7 @@
         <button class="admin-dashboard-card" type="button" data-admin-view-button="bookings" aria-controls="admin-bookings-view" aria-pressed="false"><span class="admin-dashboard-card-icon" aria-hidden="true">▦</span><span class="admin-dashboard-card-copy"><strong>Bookings</strong><small>Review requests and manage facility sessions.</small></span><span class="admin-dashboard-card-arrow" aria-hidden="true">→</span></button>
         <button class="admin-dashboard-card" type="button" data-admin-view-button="events" aria-controls="admin-events-view" aria-pressed="false"><span class="admin-dashboard-card-icon events" aria-hidden="true">✦</span><span class="admin-dashboard-card-copy"><strong>Events &amp; workshops</strong><small>Publish announcements and manage calendar closures.</small></span><span class="admin-dashboard-card-arrow" aria-hidden="true">→</span></button>
         <button class="admin-dashboard-card" type="button" data-admin-view-button="workshop-content" aria-controls="admin-workshop-content-view" aria-pressed="false"><span class="admin-dashboard-card-icon workshop-content" aria-hidden="true">▧</span><span class="admin-dashboard-card-copy"><strong>Event &amp; workshop content</strong><small>Update event summaries and photos.</small></span><span class="admin-dashboard-card-arrow" aria-hidden="true">→</span></button>
+        <button class="admin-dashboard-card" type="button" data-admin-view-button="gallery" aria-controls="admin-gallery-view" aria-pressed="false"><span class="admin-dashboard-card-icon gallery" aria-hidden="true">▣</span><span class="admin-dashboard-card-copy"><strong>Gallery updates</strong><small>Upload and manage workshop and event photos.</small></span><span class="admin-dashboard-card-arrow" aria-hidden="true">→</span></button>
         <button class="admin-dashboard-card" type="button" data-admin-view-button="statistics" aria-controls="admin-statistics-view" aria-pressed="false"><span class="admin-dashboard-card-icon statistics" aria-hidden="true">↗</span><span class="admin-dashboard-card-copy"><strong>Usage statistics</strong><small>Explore monthly facility activity and demand.</small></span><span class="admin-dashboard-card-arrow" aria-hidden="true">→</span></button>
       </nav>
       <div class="admin-dashboard-view" id="admin-bookings-view" data-admin-view-panel="bookings" hidden>
@@ -94,6 +95,17 @@
         <div class="admin-events-toolbar"><div><span class="eyebrow">EVENTS &amp; WORKSHOPS PAGE</span><h3>Event &amp; workshop content</h3><p>Update the summary and photo shown for the archived workshop and published events or workshops.</p></div><button class="btn outline" id="admin-workshop-content-refresh" type="button">↻ Refresh</button></div>
         <p id="admin-workshop-content-status" class="admin-status" role="status" aria-live="polite"></p>
         <div id="admin-workshop-content-list" class="admin-workshop-content-list"><p class="admin-status">Sign in to load event and workshop content.</p></div>
+      </div>
+      <div class="admin-dashboard-view" id="admin-gallery-view" data-admin-view-panel="gallery" hidden>
+        <div class="admin-events-toolbar"><div><span class="eyebrow">EVENTS &amp; WORKSHOPS PAGE</span><h3>Gallery updates</h3><p>Upload workshop and event photos with a short description. Photos appear in the public Gallery tab.</p></div><button class="btn outline" id="admin-gallery-refresh" type="button">↻ Refresh</button></div>
+        <form class="admin-gallery-upload-form" id="admin-gallery-upload-form">
+          <label>Photo description<textarea name="description" maxlength="240" rows="2" required placeholder="Add a short description of this workshop or event photo"></textarea></label>
+          <label>Workshop or event photo<input type="file" name="photo" accept="image/jpeg,image/png,image/webp" required><small>JPEG, PNG, or WebP. Maximum 5 MB.</small></label>
+          <p id="admin-gallery-upload-status" class="admin-status" role="status" aria-live="polite"></p>
+          <button class="btn primary" type="submit">Add photo to gallery</button>
+        </form>
+        <p id="admin-gallery-status" class="admin-status" role="status" aria-live="polite"></p>
+        <div id="admin-gallery-list" class="admin-gallery-list"><p class="admin-status">Sign in to manage gallery photos.</p></div>
       </div>
       <div class="admin-dashboard-view" id="admin-statistics-view" data-admin-view-panel="statistics" hidden>
         <div class="admin-events-toolbar"><div><span class="eyebrow">FACILITY USAGE</span><h3>Statistics &amp; monthly activity</h3><p>Live booking demand summarized by month, with daily facility calendar and website sessions.</p></div></div>

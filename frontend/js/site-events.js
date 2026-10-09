@@ -1,7 +1,8 @@
 const homeEventTicker = document.querySelector("#home-event-ticker");
 const upcomingEventsSection = document.querySelector("#upcoming-events-section");
+const eventGallery = document.querySelector("#event-gallery-grid");
 
-if (homeEventTicker || upcomingEventsSection) {
+if (homeEventTicker || upcomingEventsSection || eventGallery) {
   function escapeHTML(value) {
     return String(value ?? "").replace(/[&<>"']/g, character => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -93,6 +94,38 @@ if (homeEventTicker || upcomingEventsSection) {
     }
   }
 
+  async function loadEventGallery() {
+    if (!eventGallery) return;
+    try {
+      const response = await fetch("/api/gallery", { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Event photos could not be loaded.");
+      if (!Array.isArray(payload.items)) throw new Error("The event gallery response was invalid.");
+      eventGallery.innerHTML = payload.items.length
+        ? payload.items.map(item => `<article class="event-gallery-card">
+            <img src="${escapeHTML(item.imageUrl)}" alt="${escapeHTML(item.description)}" loading="lazy" decoding="async">
+            <p>${escapeHTML(item.description)}</p>
+          </article>`).join("")
+        : '<p class="gallery-empty">No event photos have been added yet.</p>';
+    } catch (error) {
+      console.error("Unable to load the event gallery.", error);
+      eventGallery.innerHTML = '<p class="gallery-empty">Event photos could not be loaded right now. Please try again later.</p>';
+    }
+  }
+
+  document.querySelectorAll(".workshop-page-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      const gallerySelected = tab.id === "gallery-tab";
+      document.querySelector("#workshops-tab").setAttribute("aria-selected", String(!gallerySelected));
+      document.querySelector("#gallery-tab").setAttribute("aria-selected", String(gallerySelected));
+      document.querySelector("#workshops-tab").classList.toggle("active", !gallerySelected);
+      document.querySelector("#gallery-tab").classList.toggle("active", gallerySelected);
+      document.querySelector("#workshops-tab-panel").hidden = gallerySelected;
+      document.querySelector("#gallery-tab-panel").hidden = !gallerySelected;
+    });
+  });
+
   void loadFacilityEvents();
   void loadWorkshopArchive();
+  void loadEventGallery();
 }

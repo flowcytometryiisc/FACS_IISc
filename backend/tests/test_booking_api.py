@@ -1462,6 +1462,85 @@ class BookingApiTests(unittest.TestCase):
             self.client.get("/api/workshop-images/archive").status_code, 404
         )
 
+    def test_admin_gallery_uploads_public_photos_and_can_delete_them(self):
+        self.assertEqual(self.client.get("/api/gallery").get_json(), {"items": []})
+        self.assertEqual(self.client.get("/api/admin/gallery").status_code, 401)
+        self.sign_in()
+
+        photo = b"\x89PNG\r\n\x1a\ngallery-photo"
+        unauthorized = self.client.post(
+            "/api/admin/gallery",
+            data={
+                "description": "Workshop participants",
+                "photo": (io.BytesIO(photo), "gallery.png"),
+            },
+        )
+        self.assertEqual(unauthorized.status_code, 401)
+
+        missing_photo = self.client.post(
+            "/api/admin/gallery",
+            data={"description": "Workshop participants"},
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(missing_photo.status_code, 400)
+        invalid_description = self.client.post(
+            "/api/admin/gallery",
+            data={
+                "description": " ",
+                "photo": (io.BytesIO(photo), "gallery.png"),
+            },
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(invalid_description.status_code, 400)
+        invalid_photo = self.client.post(
+            "/api/admin/gallery",
+            data={
+                "description": "Workshop participants",
+                "photo": (io.BytesIO(b"not an image"), "gallery.txt"),
+            },
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(invalid_photo.status_code, 400)
+
+        created = self.client.post(
+            "/api/admin/gallery",
+            data={
+                "description": "Workshop participants",
+                "photo": (io.BytesIO(photo), "gallery.png"),
+            },
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(created.status_code, 201)
+        item = created.get_json()["item"]
+        self.assertEqual(item["description"], "Workshop participants")
+        self.assertEqual(item["imageUrl"], f"/api/gallery-images/{item['id']}")
+
+        public_items = self.client.get("/api/gallery").get_json()["items"]
+        self.assertEqual(public_items, [item])
+        public_photo = self.client.get(item["imageUrl"])
+        self.assertEqual(public_photo.status_code, 200)
+        self.assertEqual(public_photo.mimetype, "image/png")
+        self.assertEqual(public_photo.data, photo)
+        self.assertEqual(
+            self.client.get("/api/admin/gallery").get_json()["items"], [item]
+        )
+
+        deleted = self.client.delete(
+            f"/api/admin/gallery/{item['id']}",
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(deleted.status_code, 200)
+        self.assertIsNone(deleted.get_json()["warning"])
+        self.assertEqual(self.client.get("/api/gallery").get_json(), {"items": []})
+        self.assertEqual(self.client.get(item["imageUrl"]).status_code, 404)
+        self.assertEqual(
+            self.client.delete(
+                f"/api/admin/gallery/{item['id']}",
+                headers=self.admin_headers(),
+            ).status_code,
+            404,
+        )
+
     def test_existing_local_event_database_gains_workshop_image_column(self):
         connection = sqlite3.connect(facility_app.BOOKING_DATABASE)
         try:

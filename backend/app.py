@@ -264,6 +264,15 @@ def booking_connection():
             updated_at TEXT NOT NULL
         )
     """)
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS facility_gallery_items (
+            id TEXT PRIMARY KEY,
+            description TEXT NOT NULL,
+            image_path TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
     connection.execute(
         """INSERT OR IGNORE INTO facility_workshop_archive
            (id, summary, image_path, updated_at) VALUES (?, ?, NULL, ?)""",
@@ -1849,6 +1858,16 @@ def workshop_content_response(summary, image_path):
     }
 
 
+def gallery_item_row(row):
+    return {
+        "id": row["id"],
+        "description": row["description"],
+        "imageUrl": f"/api/gallery-images/{row['id']}",
+        "createdAt": row["created_at"],
+        "updatedAt": row["updated_at"],
+    }
+
+
 @app.get("/api/admin/workshop-content")
 def get_admin_workshop_content():
     denied = require_admin()
@@ -2022,6 +2041,107 @@ def update_admin_workshop_event_content(event_id):
         "workshop": facility_event_row(updated),
         "warning": cleanup_warning,
     })
+
+
+@app.get("/api/admin/gallery")
+def get_admin_gallery():
+    denied = require_admin()
+    if denied:
+        return denied
+    connection = booking_connection()
+    try:
+        rows = connection.execute(
+            "SELECT * FROM facility_gallery_items ORDER BY created_at DESC"
+        ).fetchall()
+    finally:
+        connection.close()
+    response = jsonify({"items": [gallery_item_row(row) for row in rows]})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.post("/api/admin/gallery")
+def create_admin_gallery_item():
+    denied = require_admin()
+    if denied:
+        return denied
+    description = request.form.get("description", "")
+    if not description.strip() or len(description.strip()) > 240:
+        return jsonify({
+            "error": "Enter a short description of no more than 240 characters."
+        }), 400
+    photo = request.files.get("photo")
+    if not photo or not photo.filename:
+        return jsonify({"error": "Choose a photo to add to the gallery."}), 400
+    image_content = photo.read(MAX_WORKSHOP_IMAGE_SIZE + 1)
+    if len(image_content) > MAX_WORKSHOP_IMAGE_SIZE:
+        return jsonify({"error": "Gallery photos must be 5 MB or smaller."}), 400
+    extension, content_type = detect_workshop_image(image_content)
+    if not extension:
+        return jsonify({"error": "Upload a JPEG, PNG, or WebP image."}), 400
+
+    item_id = f"GL-{secrets.token_hex(8).upper()}"
+    image_path = f"gallery/{item_id}/{secrets.token_hex(16)}{extension}"
+    try:
+        store_workshop_image(image_path, image_content, content_type)
+    except SupabaseStorageError as storage_error:
+        return jsonify({"error": str(storage_error)}), 502
+    except OSError:
+        app.logger.exception("Unable to save gallery photo")
+        return jsonify({"error": "The gallery photo could not be saved."}), 500
+
+    now = datetime.now(timezone.utc).isoformat()
+    connection = None
+    try:
+        connection = booking_connection()
+        connection.execute(
+            """INSERT INTO facility_gallery_items
+               (id, description, image_path, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?)""",
+            (item_id, description.strip(), image_path, now, now),
+        )
+        connection.commit()
+        row = connection.execute(
+            "SELECT * FROM facility_gallery_items WHERE id = ?", (item_id,)
+        ).fetchone()
+    except (BookingDatabaseError, sqlite3.Error):
+        app.logger.exception("Unable to save gallery item")
+        try:
+            remove_workshop_image(image_path)
+        except (SupabaseStorageError, OSError):
+            app.logger.exception("Unable to clean up an unlisted gallery photo")
+        return jsonify({"error": "The gallery item could not be saved."}), 500
+    finally:
+        if connection is not None:
+            connection.close()
+    return jsonify({"item": gallery_item_row(row)}), 201
+
+
+@app.delete("/api/admin/gallery/<item_id>")
+def delete_admin_gallery_item(item_id):
+    denied = require_admin()
+    if denied:
+        return denied
+    connection = booking_connection()
+    try:
+        row = connection.execute(
+            "SELECT image_path FROM facility_gallery_items WHERE id = ?", (item_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "The gallery photo was not found."}), 404
+        connection.execute(
+            "DELETE FROM facility_gallery_items WHERE id = ?", (item_id,)
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    warning = None
+    try:
+        remove_workshop_image(row["image_path"])
+    except (SupabaseStorageError, OSError):
+        app.logger.exception("Unable to remove deleted gallery photo")
+        warning = "The gallery item was removed, but its photo could not be deleted from storage."
+    return jsonify({"deleted": True, "id": item_id, "warning": warning})
 
 
 @app.delete("/api/admin/events/<event_id>")
@@ -2782,6 +2902,51 @@ def get_archived_workshop_content():
     finally:
         connection.close()
     response = jsonify(workshop_content_response(row["summary"], row["image_path"]))
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/api/gallery")
+def get_public_gallery():
+    connection = booking_connection()
+    try:
+        rows = connection.execute(
+            "SELECT * FROM facility_gallery_items ORDER BY created_at DESC"
+        ).fetchall()
+    finally:
+        connection.close()
+    response = jsonify({"items": [gallery_item_row(row) for row in rows]})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/api/gallery-images/<item_id>")
+def get_gallery_image(item_id):
+    connection = booking_connection()
+    try:
+        row = connection.execute(
+            "SELECT image_path FROM facility_gallery_items WHERE id = ?", (item_id,)
+        ).fetchone()
+    finally:
+        connection.close()
+    if not row or not row["image_path"]:
+        return jsonify({"error": "The gallery photo was not found."}), 404
+    try:
+        content = read_workshop_image(row["image_path"])
+    except SupabaseStorageError as error:
+        return jsonify({"error": str(error)}), 502
+    if content is None:
+        return jsonify({"error": "The gallery photo was not found."}), 404
+    _, content_type = detect_workshop_image(content)
+    if not content_type:
+        app.logger.error("Stored gallery photo has an unsupported image format")
+        return jsonify({"error": "The gallery photo could not be read."}), 500
+    response = send_file(
+        io.BytesIO(content),
+        mimetype=content_type,
+        download_name=f"gallery-photo{Path(row['image_path']).suffix}",
+        max_age=0,
+    )
     response.headers["Cache-Control"] = "no-store"
     return response
 

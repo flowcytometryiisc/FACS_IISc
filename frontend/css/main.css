@@ -436,6 +436,16 @@ footer{padding:10px 0 8px;background:#041f40;color:#c1d0e1}
 .upcoming-workshop-note strong{color:#254968;font-size:8px}
 .upcoming-workshop-note p{margin:3px 0;color:#6b8195;font-size:7px}
 .upcoming-workshop-note a{color:#1473c8;font-size:7px;font-weight:600}
+.workshop-page-tabs{display:flex;gap:8px;margin:0 0 22px;border-bottom:1px solid #dce7f0}
+.workshop-page-tab{position:relative;padding:10px 15px;border:0;background:transparent;color:#62798f;font:700 11px Inter,Arial,sans-serif;cursor:pointer}
+.workshop-page-tab:hover,.workshop-page-tab.active{color:#126eae}
+.workshop-page-tab.active:after{position:absolute;right:10px;bottom:-1px;left:10px;height:3px;border-radius:3px 3px 0 0;background:#1680c5;content:""}
+.gallery-tab-panel[hidden]{display:none}
+.event-gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:16px}
+.event-gallery-card{overflow:hidden;border:1px solid #e0e9f0;border-radius:13px;background:#fff;box-shadow:0 8px 22px rgba(20,55,88,.055)}
+.event-gallery-card img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:#f1f6fa}
+.event-gallery-card p{margin:0;padding:12px 14px;color:#415f78;font-size:12px;line-height:1.55}
+.gallery-empty{grid-column:1/-1;margin:0;padding:18px;border:1px dashed #cbd9e5;border-radius:10px;color:#71869a;font-size:12px}
 .contact-detail-grid{display:grid;grid-template-columns:.9fr 1.1fr;gap:14px}
 .contact-detail-card{padding:17px;border:1px solid #e0e9f0;border-radius:8px;background:#fff}
 .contact-detail-card h2{margin:5px 0 12px;color:#173b5d;font:800 15px Manrope,Inter,sans-serif}
@@ -2049,6 +2059,7 @@ main section[id],main [id]{scroll-margin-top:28px}
 
 .admin-dashboard-cards{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
 .admin-dashboard-card-icon.workshop-content{background:#fff3e5;color:#ad6421}
+.admin-dashboard-card-icon.gallery{background:#e7f5f1;color:#14836c}
 .admin-workshop-content-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:14px}
 .admin-workshop-content-card{min-width:0;padding:16px;border:1px solid #dce7f0;border-radius:13px;background:#fff}
 .admin-workshop-content-heading{display:flex;align-items:center;gap:13px;margin-bottom:14px}
@@ -2065,6 +2076,20 @@ main section[id],main [id]{scroll-margin-top:28px}
 .admin-workshop-content-form .btn{justify-self:start;min-height:36px;padding:8px 12px;font-size:10px}
 .workshop-archive-photo,.upcoming-event-photo{display:block;width:100%;max-width:560px;max-height:300px;margin:10px 0 14px;border-radius:10px;object-fit:cover}
 .upcoming-event-photo{margin:0 0 12px}
+.admin-gallery-upload-form{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.7fr);gap:12px;align-items:end;margin:16px 0;padding:16px;border:1px solid #dce7f0;border-radius:13px;background:#f8fbfd}
+.admin-gallery-upload-form>label{display:grid;gap:5px;color:#294863;font-size:10px;font-weight:700}
+.admin-gallery-upload-form textarea,.admin-gallery-upload-form input[type=file]{width:100%;padding:9px 10px;border:1px solid #d5e1eb;border-radius:8px;background:#fff;color:#25445f;font:500 11px/1.5 Inter,Arial,sans-serif}
+.admin-gallery-upload-form textarea{resize:vertical}
+.admin-gallery-upload-form small{color:#7b8fa2;font-size:9px;font-weight:500}
+.admin-gallery-upload-form .admin-status{min-height:0;margin:0;font-size:10px}
+.admin-gallery-upload-form .btn{justify-self:start}
+.admin-gallery-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr));gap:13px}
+.admin-gallery-card{overflow:hidden;border:1px solid #dce7f0;border-radius:12px;background:#fff}
+.admin-gallery-card>img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:#f1f6fa}
+.admin-gallery-card>div{display:grid;gap:10px;padding:12px}
+.admin-gallery-card p{margin:0;color:#415f78;font-size:11px;line-height:1.5}
+.admin-gallery-card .admin-delete-button{justify-self:start}
 @media(max-width:760px){
   .admin-workshop-content-list{grid-template-columns:1fr}
+  .admin-gallery-upload-form{grid-template-columns:1fr}
 }

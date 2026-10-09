@@ -37,6 +37,8 @@ preview; the live schedule requires the backend to be running.
 - Admin-managed events and workshops with editable dates, descriptions, and
   validated brochure or registration links; upcoming items appear in an
   animated homepage hero ticker and on the Events & Workshop page
+- A public Events & Workshops page gallery for admin-uploaded workshop and event
+  photos
 - Supabase PostgreSQL and private Storage deployment path for durable hosted
   bookings, session conflict constraints, form files and audit history
 - Hover and focus elevation on cards and links

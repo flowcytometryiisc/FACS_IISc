@@ -2,15 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Past and upcoming workshop information from the IISc Divisional FACS Facility.">
-  <title>Workshops | Divisional FACS Facility, IISc</title>
+  <meta name="description" content="Events, workshops, and photo highlights from the IISc Divisional FACS Facility.">
+  <title>Events &amp; Workshops | Divisional FACS Facility, IISc</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="css/main.css">
 </head>
 <body>
 <main class="inner-page">
-  <header class="page-hero hero-workshops"><div class="page-container"><div class="eyebrow light">LEARNING &amp; EVENTS</div><h1>Workshops</h1><p>Facility workshop information and archived learning opportunities.</p></div></header>
+  <header class="page-hero hero-workshops"><div class="page-container"><div class="eyebrow light">LEARNING &amp; EVENTS</div><h1>Events &amp; Workshops</h1><p>Facility events, workshop information, and archived learning opportunities.</p></div></header>
   <section class="page-container content-section">
+    <nav class="workshop-page-tabs" role="tablist" aria-label="Events and workshop content">
+      <button class="workshop-page-tab active" id="workshops-tab" type="button" role="tab" aria-selected="true" aria-controls="workshops-tab-panel">Events &amp; workshops</button>
+      <button class="workshop-page-tab" id="gallery-tab" type="button" role="tab" aria-selected="false" aria-controls="gallery-tab-panel">Gallery</button>
+    </nav>
+    <div id="workshops-tab-panel" role="tabpanel" aria-labelledby="workshops-tab">
     <section class="upcoming-events-section" id="upcoming-events-section" aria-labelledby="upcoming-events-title" hidden>
       <div class="section-heading"><div><div class="eyebrow">COMING UP</div><h2 id="upcoming-events-title">Upcoming workshops &amp; events</h2></div><p>Published by the Divisional FACS Facility.</p></div>
       <div class="upcoming-events-list" id="upcoming-events-list" aria-live="polite"></div>
@@ -29,6 +34,11 @@
       </div>
     </article>
     <div class="upcoming-workshop-note"><span class="sidebar-dot"></span><div><strong>No upcoming workshops listed</strong><p>No upcoming workshop details are currently available.</p></div></div>
+    </div>
+    <section class="gallery-tab-panel" id="gallery-tab-panel" role="tabpanel" aria-labelledby="gallery-tab" hidden>
+      <div class="section-heading"><div><div class="eyebrow">EVENT MOMENTS</div><h2>Workshop &amp; event gallery</h2></div><p>Photos and highlights from facility workshops and events.</p></div>
+      <div class="event-gallery-grid" id="event-gallery-grid" aria-live="polite"><p class="gallery-empty">Loading event photos…</p></div>
+    </section>
   </section>
 </main>
 <script src="js/site-shell.js"></script><script src="js/main.js"></script>

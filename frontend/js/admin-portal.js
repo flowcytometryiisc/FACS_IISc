@@ -38,6 +38,10 @@ if (adminPortal) {
   const eventCancelEditButton = adminPortal.querySelector("#admin-event-cancel-edit");
   const workshopContentList = adminPortal.querySelector("#admin-workshop-content-list");
   const workshopContentStatus = adminPortal.querySelector("#admin-workshop-content-status");
+  const galleryList = adminPortal.querySelector("#admin-gallery-list");
+  const galleryStatus = adminPortal.querySelector("#admin-gallery-status");
+  const galleryUploadForm = adminPortal.querySelector("#admin-gallery-upload-form");
+  const galleryUploadStatus = adminPortal.querySelector("#admin-gallery-upload-status");
   const brownBearAdminLink = adminPortal.querySelector("#admin-brownbear-admin");
   const editDialog = document.querySelector("#admin-edit-booking");
   const editForm = document.querySelector("#admin-edit-form");
@@ -53,6 +57,7 @@ if (adminPortal) {
   let facilityEvents = [];
   let workshopArchive = null;
   let eventContentItems = [];
+  let galleryItems = [];
   let pendingRemoval = null;
   let calendarFetchedAt = "";
   let selectedCalendarDate = "";
@@ -80,6 +85,7 @@ if (adminPortal) {
       bookings: ["Bookings", "Review requests, manage bookings, and sync the facility calendar."],
       events: ["Events & workshops", "Publish facility announcements and manage calendar closures."],
       "workshop-content": ["Event & workshop content", "Update event and workshop summaries and photos shown on the public website."],
+      gallery: ["Gallery updates", "Upload and manage workshop and event photos shown in the public Gallery tab."],
       statistics: ["Usage statistics", "Explore monthly facility activity and demand."],
     };
     const workspace = workspaces[viewName];
@@ -100,6 +106,7 @@ if (adminPortal) {
       document.dispatchEvent(new Event("admin:statistics-opened"));
     }
     if (viewName === "workshop-content") void loadWorkshopContent();
+    if (viewName === "gallery") void loadGallery();
   }
 
   dashboardViewButtons.forEach(button => {
@@ -134,26 +141,34 @@ if (adminPortal) {
   function requestManagedItemRemoval(kind, id) {
     const item = kind === "closure"
       ? calendarClosures.find(closure => closure.id === id)
-      : facilityEvents.find(facilityEvent => facilityEvent.id === id);
+      : kind === "gallery"
+        ? galleryItems.find(galleryItem => galleryItem.id === id)
+        : facilityEvents.find(facilityEvent => facilityEvent.id === id);
     if (!item) {
       dashboardStatus.textContent = `This ${kind} is no longer in the list. Refresh and try again.`;
       return;
     }
     const isClosure = kind === "closure";
+    const isGallery = kind === "gallery";
     const label = isClosure
       ? item.type === "exception" ? "Exception holiday" : "Workshop holiday"
-      : item.category === "workshop" ? "Workshop" : "Facility event";
-    const dates = item.startDate === item.endDate
+      : isGallery ? "Gallery photo"
+        : item.category === "workshop" ? "Workshop" : "Facility event";
+    const dates = isGallery ? "" : item.startDate === item.endDate
       ? formatDate(item.startDate)
       : `${formatDate(item.startDate)} – ${formatDate(item.endDate)}`;
-    itemConfirmEyebrow.textContent = isClosure ? "CALENDAR CLOSURE" : "EVENT CONTENT";
-    itemConfirmTitle.textContent = isClosure ? "Remove this closure?" : "Delete this event?";
-    itemConfirmName.textContent = `${label} · ${dates} · ${isClosure ? item.remark : item.title}`;
+    itemConfirmEyebrow.textContent = isClosure ? "CALENDAR CLOSURE" : isGallery ? "EVENT GALLERY" : "EVENT CONTENT";
+    itemConfirmTitle.textContent = isClosure ? "Remove this closure?" : isGallery ? "Delete this gallery photo?" : "Delete this event?";
+    itemConfirmName.textContent = isGallery
+      ? item.description
+      : `${label} · ${dates} · ${isClosure ? item.remark : item.title}`;
     itemConfirmDescription.textContent = isClosure
       ? "Removing it may make the affected booking sessions available again."
-      : "This event will be removed from the homepage ticker and the Events & Workshop page.";
-    itemConfirmCancelButton.textContent = isClosure ? "Keep closure" : "Keep event";
-    itemConfirmButton.textContent = isClosure ? "Remove closure" : "Delete event";
+      : isGallery
+        ? "This photo and its description will be removed from the public Gallery tab."
+        : "This event will be removed from the homepage ticker and the Events & Workshop page.";
+    itemConfirmCancelButton.textContent = isClosure ? "Keep closure" : isGallery ? "Keep photo" : "Keep event";
+    itemConfirmButton.textContent = isClosure ? "Remove closure" : isGallery ? "Delete photo" : "Delete event";
     itemConfirmStatus.textContent = "";
     pendingRemoval = { kind, id };
     itemConfirmDialog.showModal();
@@ -163,16 +178,23 @@ if (adminPortal) {
     if (!pendingRemoval) return;
     const removal = pendingRemoval;
     itemConfirmButton.disabled = true;
-    itemConfirmStatus.textContent = removal.kind === "closure" ? "Removing closure…" : "Deleting event…";
+    itemConfirmStatus.textContent = removal.kind === "closure"
+      ? "Removing closure…"
+      : removal.kind === "gallery" ? "Deleting gallery photo…" : "Deleting event…";
     try {
-      const resource = removal.kind === "closure" ? "calendar-closures" : "events";
-      await fetchJSON(`${apiBase}/admin/${resource}/${encodeURIComponent(removal.id)}`, {
+      const resource = removal.kind === "closure"
+        ? "calendar-closures"
+        : removal.kind === "gallery" ? "gallery" : "events";
+      const payload = await fetchJSON(`${apiBase}/admin/${resource}/${encodeURIComponent(removal.id)}`, {
         method: "DELETE",
       });
       pendingRemoval = null;
       itemConfirmDialog.close();
       if (removal.kind === "closure") {
         await Promise.all([loadCalendarClosures(), loadFacilityCalendar()]);
+      } else if (removal.kind === "gallery") {
+        await loadGallery();
+        dashboardStatus.textContent = payload.warning || "Gallery photo removed from the public Gallery tab.";
       } else {
         await loadFacilityEvents();
       }
@@ -549,6 +571,57 @@ if (adminPortal) {
 
   adminPortal.querySelector("#admin-workshop-content-refresh").addEventListener("click", () => {
     void loadWorkshopContent();
+  });
+
+  function renderGallery() {
+    galleryList.innerHTML = galleryItems.length
+      ? galleryItems.map(item => `<article class="admin-gallery-card">
+          <img src="${escapeHTML(item.imageUrl)}" alt="${escapeHTML(item.description)}" loading="lazy">
+          <div><p>${escapeHTML(item.description)}</p><button class="admin-delete-button" type="button" data-gallery-delete="${escapeHTML(item.id)}">Delete photo</button></div>
+        </article>`).join("")
+      : '<p class="admin-status">No photos have been added to the gallery yet.</p>';
+  }
+
+  async function loadGallery() {
+    galleryStatus.textContent = "Loading gallery photos…";
+    try {
+      const payload = await fetchJSON(`${apiBase}/admin/gallery`, { cache: "no-store" });
+      galleryItems = payload.items;
+      renderGallery();
+      galleryStatus.textContent = `${galleryItems.length} gallery photo${galleryItems.length === 1 ? "" : "s"}`;
+    } catch (error) {
+      galleryStatus.textContent = error.message;
+    }
+  }
+
+  galleryUploadForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!galleryUploadForm.reportValidity()) return;
+    const submitButton = galleryUploadForm.querySelector('[type="submit"]');
+    submitButton.disabled = true;
+    galleryUploadStatus.textContent = "Uploading photo…";
+    try {
+      const payload = await fetchJSON(`${apiBase}/admin/gallery`, {
+        method: "POST",
+        body: new FormData(galleryUploadForm),
+      });
+      galleryUploadForm.reset();
+      await loadGallery();
+      galleryUploadStatus.textContent = payload.warning || "Photo added to the public Gallery tab.";
+    } catch (error) {
+      galleryUploadStatus.textContent = error.message;
+    } finally {
+      submitButton.disabled = false;
+    }
+  });
+
+  galleryList.addEventListener("click", event => {
+    const button = event.target.closest("[data-gallery-delete]");
+    if (button) requestManagedItemRemoval("gallery", button.dataset.galleryDelete);
+  });
+
+  adminPortal.querySelector("#admin-gallery-refresh").addEventListener("click", () => {
+    void loadGallery();
   });
 
   function resetFacilityEventForm() {
