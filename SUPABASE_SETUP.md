@@ -18,13 +18,18 @@ the database URL or service-role key.
    migration makes submissions fail when the database rejects that status.
 4. Confirm the migrations create `bookings`, `booking_sessions`,
    `booking_audit_log`, `calendar_closures`, `facility_events`,
-   `facility_workshop_archive`, `facility_gallery_items`, and `instruments`;
-   and the private `booking-forms` and `workshop-images` buckets. The tables
+   `facility_workshop_archive`, `facility_gallery_items`, `facility_documents`,
+   and `instruments`; and the private `booking-forms`, `workshop-images`, and
+   `facility-documents` buckets. The tables
    have RLS enabled and no `anon`/`authenticated` table grants. Only the
    backend's trusted database connection and Storage service role should access
-   booking information, forms, workshop photos, and event gallery photos.
+   booking information, forms, facility documents, workshop photos, and event
+   gallery photos.
    If the gallery table was created by an earlier deployment, apply
    `20261009153000_gallery_event_details.sql` to add event names and dates.
+   The `20261012110000_facility_documents.sql` migration seeds the existing
+   public document links and creates the private PDF bucket used by the admin
+   document manager.
 
 The schema keeps the current booking API compatible while maintaining a
 normalized session table. PostgreSQL enforces that confirmed sessions for the
@@ -47,6 +52,7 @@ Install dependencies from `backend/requirements.txt` and configure these as
 | `SUPABASE_URL` | Project URL, such as `https://<project-ref>.supabase.co`. |
 | `SUPABASE_SERVICE_ROLE_KEY` | A server-only service-role key from the project's API settings. Never use it in HTML, JavaScript, or a public variable. |
 | `SUPABASE_STORAGE_BUCKET` | `booking-forms` (change the SQL migration too if you intentionally rename it). |
+| `FACILITY_DOCUMENT_BUCKET` | `facility-documents` (change the SQL migration too if you intentionally rename it). |
 | `FLASK_SECRET_KEY` | A long random secret that remains unchanged across deployments and restarts. |
 | `BOOKING_ADMIN_PASSWORD` | A unique, strong admin password stored only in the host's secret settings. |
 | `BOOKING_COOKIE_SECURE` | `true` for the hosted HTTPS site. |

@@ -39,8 +39,11 @@ preview; the live schedule requires the backend to be running.
   animated homepage hero ticker and on the Events & Workshop page
 - A public Events & Workshops page gallery with admin-managed photos, event
   names, dates, and descriptions
+- An admin-managed Forms & Resources document workspace for publishing and
+  removing PDF documents, with existing facility document links included
 - Supabase PostgreSQL and private Storage deployment path for durable hosted
-  bookings, session conflict constraints, form files and audit history
+  bookings, session conflict constraints, form files, public facility
+  documents and workshop/gallery images
 - Hover and focus elevation on cards and links
 - Clickable map link for directions to the Division of Biological Sciences
 - Facility committee, staff, offline-analysis software, research links,

@@ -24,7 +24,8 @@ BASE = Path(__file__).resolve().parents[1]
 CALENDAR_URL = "https://www.brownbearsw.com/cal/flow_cytometry"
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
-app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_SIZE + 64 * 1024
 app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SECURE"] = (
@@ -100,11 +101,35 @@ def add_security_headers(response):
         )
     return response
 
+
+@app.errorhandler(413)
+def request_entity_too_large(_error):
+    return jsonify({"error": "Uploaded files must be 10 MB or smaller."}), 413
+
 BOOKING_DATABASE = BASE / "backend" / "instance" / "bookings.sqlite3"
 BOOKING_UPLOADS = BASE / "backend" / "instance" / "booking-forms"
 SUPABASE_STORAGE_BUCKET = os.environ.get("SUPABASE_STORAGE_BUCKET", "booking-forms")
 WORKSHOP_IMAGE_BUCKET = os.environ.get("WORKSHOP_IMAGE_BUCKET", "workshop-images")
 WORKSHOP_UPLOADS = BASE / "backend" / "instance" / "workshop-images"
+FACILITY_DOCUMENT_BUCKET = os.environ.get(
+    "FACILITY_DOCUMENT_BUCKET", "facility-documents"
+)
+FACILITY_DOCUMENTS = BASE / "backend" / "instance" / "facility-documents"
+MAX_FACILITY_DOCUMENT_SIZE = MAX_UPLOAD_SIZE
+LEGACY_FACILITY_DOCUMENTS = (
+    (
+        "legacy-cytoflex-lx",
+        "CytoFLEX LX",
+        "PDF · listed as modified 5 November 2020",
+        "https://drive.google.com/file/d/1-ngsJzFZl00ujRPjUp7CCU7XbvuuNn7g/view?usp=drive_web",
+    ),
+    (
+        "legacy-user-charges",
+        "Revised user charges",
+        "PDF · posted 16 October 2023; effective 1 November 2023",
+        "https://drive.google.com/file/d/1IypqLbMMFEdebMY9m-HYlPagSZt_hX5S/view?usp=drive_web",
+    ),
+)
 ARCHIVED_WORKSHOP_ID = "past-workshop"
 ARCHIVED_WORKSHOP_SUMMARY = (
     "Two days of sessions exploring fundamental principles and dynamic applications "
@@ -275,6 +300,41 @@ def booking_connection():
             updated_at TEXT NOT NULL
         )
     """)
+    document_table_exists = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'facility_documents'"
+    ).fetchone() is not None
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS facility_documents (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL CHECK (length(trim(title)) BETWEEN 1 AND 120),
+            description TEXT NOT NULL DEFAULT '',
+            original_filename TEXT,
+            storage_path TEXT,
+            source_url TEXT,
+            created_at TEXT NOT NULL,
+            CHECK (
+                (storage_path IS NOT NULL AND source_url IS NULL)
+                OR (storage_path IS NULL AND source_url IS NOT NULL)
+            )
+        )
+    """)
+    if not document_table_exists:
+        connection.executemany(
+            """INSERT INTO facility_documents
+               (id, title, description, original_filename, storage_path, source_url, created_at)
+               VALUES (?, ?, ?, NULL, NULL, ?, ?)""",
+            [
+                (
+                    document_id,
+                    title,
+                    description,
+                    source_url,
+                    datetime.now(timezone.utc).isoformat(),
+                )
+                for document_id, title, description, source_url
+                in LEGACY_FACILITY_DOCUMENTS
+            ],
+        )
     gallery_columns = {
         row["name"] for row in connection.execute(
             "PRAGMA table_info(facility_gallery_items)"
@@ -548,6 +608,49 @@ def remove_workshop_image(object_key):
     local_path = (WORKSHOP_UPLOADS / object_key).resolve()
     if WORKSHOP_UPLOADS.resolve() not in local_path.parents:
         raise OSError("Refusing to remove a workshop image outside the upload directory.")
+    if local_path.is_file():
+        local_path.unlink()
+
+
+def store_facility_document(object_key, content):
+    if use_supabase_storage():
+        supabase_storage_request(
+            "POST",
+            object_key,
+            content,
+            "application/pdf",
+            bucket=FACILITY_DOCUMENT_BUCKET,
+        )
+        return
+    local_path = (FACILITY_DOCUMENTS / object_key).resolve()
+    if FACILITY_DOCUMENTS.resolve() not in local_path.parents:
+        raise OSError("Refusing to store a facility document outside its upload directory.")
+    local_path.parent.mkdir(parents=True, exist_ok=True)
+    local_path.write_bytes(content)
+
+
+def read_facility_document(object_key):
+    if use_supabase_storage():
+        return supabase_storage_request(
+            "GET", object_key, bucket=FACILITY_DOCUMENT_BUCKET
+        )
+    local_path = (FACILITY_DOCUMENTS / object_key).resolve()
+    if FACILITY_DOCUMENTS.resolve() not in local_path.parents or not local_path.is_file():
+        return None
+    return local_path.read_bytes()
+
+
+def remove_facility_document(object_key):
+    if not object_key:
+        return
+    if use_supabase_storage():
+        supabase_storage_request(
+            "DELETE", object_key, bucket=FACILITY_DOCUMENT_BUCKET
+        )
+        return
+    local_path = (FACILITY_DOCUMENTS / object_key).resolve()
+    if FACILITY_DOCUMENTS.resolve() not in local_path.parents:
+        raise OSError("Refusing to remove a facility document outside its upload directory.")
     if local_path.is_file():
         local_path.unlink()
 
@@ -1473,8 +1576,8 @@ def create_booking():
     original_name = secure_filename(PureWindowsPath(upload.filename).name)
     if not original_name.lower().endswith(".pdf"):
         return jsonify({"error": "The facility user form must be a PDF."}), 400
-    content = upload.stream.read(10 * 1024 * 1024 + 1)
-    if len(content) > 10 * 1024 * 1024:
+    content = upload.stream.read(MAX_UPLOAD_SIZE + 1)
+    if len(content) > MAX_UPLOAD_SIZE:
         return jsonify({"error": "The uploaded user form must be smaller than 10 MB."}), 413
     if not content.startswith(b"%PDF-"):
         return jsonify({"error": "The uploaded file is not a valid PDF document."}), 400
@@ -1883,6 +1986,187 @@ def gallery_item_row(row):
         "createdAt": row["created_at"],
         "updatedAt": row["updated_at"],
     }
+
+
+def facility_document_row(row):
+    return {
+        "id": row["id"],
+        "title": row["title"],
+        "description": row["description"],
+        "filename": row["original_filename"],
+        "url": row["source_url"] or f"/api/documents/{row['id']}/file",
+        "uploaded": row["storage_path"] is not None,
+        "createdAt": row["created_at"],
+    }
+
+
+@app.get("/api/documents")
+def get_public_documents():
+    connection = booking_connection()
+    try:
+        rows = connection.execute(
+            "SELECT * FROM facility_documents ORDER BY created_at DESC"
+        ).fetchall()
+    finally:
+        connection.close()
+    response = jsonify({"items": [facility_document_row(row) for row in rows]})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/api/documents/<document_id>/file")
+def get_facility_document_file(document_id):
+    connection = booking_connection()
+    try:
+        row = connection.execute(
+            """SELECT original_filename, storage_path FROM facility_documents
+               WHERE id = ?""",
+            (document_id,),
+        ).fetchone()
+    finally:
+        connection.close()
+    if not row or not row["storage_path"]:
+        return jsonify({"error": "The facility document was not found."}), 404
+    try:
+        content = read_facility_document(row["storage_path"])
+    except SupabaseStorageError as error:
+        return jsonify({"error": str(error)}), 502
+    except OSError:
+        app.logger.exception("Unable to read facility document")
+        return jsonify({"error": "The facility document could not be read."}), 500
+    if content is None:
+        return jsonify({"error": "The facility document was not found."}), 404
+    if b"%PDF-" not in content[:1024]:
+        app.logger.error("Stored facility document is not a valid PDF")
+        return jsonify({"error": "The facility document could not be read."}), 500
+    response = send_file(
+        io.BytesIO(content),
+        mimetype="application/pdf",
+        download_name=row["original_filename"] or "facility-document.pdf",
+        as_attachment=False,
+        max_age=0,
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/api/admin/documents")
+def get_admin_documents():
+    denied = require_admin()
+    if denied:
+        return denied
+    connection = booking_connection()
+    try:
+        rows = connection.execute(
+            "SELECT * FROM facility_documents ORDER BY created_at DESC"
+        ).fetchall()
+    finally:
+        connection.close()
+    response = jsonify({"items": [facility_document_row(row) for row in rows]})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.post("/api/admin/documents")
+def create_admin_document():
+    denied = require_admin()
+    if denied:
+        return denied
+    title = request.form.get("title", "").strip()
+    description = request.form.get("description", "").strip()
+    if not title or len(title) > 120:
+        return jsonify({"error": "Enter a document title of no more than 120 characters."}), 400
+    if len(description) > 240:
+        return jsonify({"error": "Document descriptions must be 240 characters or fewer."}), 400
+    upload = request.files.get("document")
+    if not upload or not upload.filename:
+        return jsonify({"error": "Choose a PDF document to upload."}), 400
+    if Path(upload.filename).suffix.lower() != ".pdf":
+        return jsonify({"error": "Only PDF documents can be uploaded."}), 400
+    content = upload.read(MAX_FACILITY_DOCUMENT_SIZE + 1)
+    if len(content) > MAX_FACILITY_DOCUMENT_SIZE:
+        return jsonify({"error": "Documents must be 10 MB or smaller."}), 400
+    if b"%PDF-" not in content[:1024]:
+        return jsonify({"error": "The selected file is not a valid PDF."}), 400
+    original_filename = secure_filename(upload.filename)
+    if not original_filename:
+        return jsonify({"error": "Choose a PDF file with a valid filename."}), 400
+
+    document_id = f"DOC-{secrets.token_hex(8).upper()}"
+    storage_path = f"documents/{document_id}/{secrets.token_hex(16)}.pdf"
+    try:
+        store_facility_document(storage_path, content)
+    except SupabaseStorageError as error:
+        return jsonify({"error": str(error)}), 502
+    except OSError:
+        app.logger.exception("Unable to save facility document")
+        return jsonify({"error": "The facility document could not be saved."}), 500
+
+    created_at = datetime.now(timezone.utc).isoformat()
+    connection = None
+    try:
+        connection = booking_connection()
+        connection.execute(
+            """INSERT INTO facility_documents
+               (id, title, description, original_filename, storage_path, source_url, created_at)
+               VALUES (?, ?, ?, ?, ?, NULL, ?)""",
+            (
+                document_id,
+                title,
+                description,
+                original_filename,
+                storage_path,
+                created_at,
+            ),
+        )
+        connection.commit()
+        row = connection.execute(
+            "SELECT * FROM facility_documents WHERE id = ?", (document_id,)
+        ).fetchone()
+    except (BookingDatabaseError, sqlite3.Error):
+        app.logger.exception("Unable to save facility document record")
+        try:
+            remove_facility_document(storage_path)
+        except (SupabaseStorageError, OSError):
+            app.logger.exception("Unable to clean up an unlisted facility document")
+        return jsonify({"error": "The facility document could not be saved."}), 500
+    finally:
+        if connection is not None:
+            connection.close()
+    return jsonify({"item": facility_document_row(row)}), 201
+
+
+@app.delete("/api/admin/documents/<document_id>")
+def delete_admin_document(document_id):
+    denied = require_admin()
+    if denied:
+        return denied
+    connection = booking_connection()
+    try:
+        row = connection.execute(
+            "SELECT storage_path FROM facility_documents WHERE id = ?",
+            (document_id,),
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "The facility document was not found."}), 404
+        connection.execute(
+            "DELETE FROM facility_documents WHERE id = ?", (document_id,)
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    warning = None
+    if row["storage_path"]:
+        try:
+            remove_facility_document(row["storage_path"])
+        except (SupabaseStorageError, OSError):
+            app.logger.exception("Unable to remove deleted facility document file")
+            warning = (
+                "The document was removed from the public page, but its stored file "
+                "could not be deleted."
+            )
+    return jsonify({"warning": warning})
 
 
 @app.get("/api/admin/workshop-content")

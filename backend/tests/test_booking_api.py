@@ -28,9 +28,13 @@ class BookingApiTests(unittest.TestCase):
         self.workshop_uploads_patch = patch.object(
             facility_app, "WORKSHOP_UPLOADS", storage_path / "workshop-images"
         )
+        self.documents_patch = patch.object(
+            facility_app, "FACILITY_DOCUMENTS", storage_path / "facility-documents"
+        )
         self.database_patch.start()
         self.uploads_patch.start()
         self.workshop_uploads_patch.start()
+        self.documents_patch.start()
         self.calendar_response_patch = patch.object(
             facility_app,
             "urlopen",
@@ -58,6 +62,7 @@ class BookingApiTests(unittest.TestCase):
     def tearDown(self):
         self.password_patch.stop()
         self.workshop_uploads_patch.stop()
+        self.documents_patch.stop()
         self.uploads_patch.stop()
         self.database_patch.stop()
         self.calendar_response_patch.stop()
@@ -84,6 +89,76 @@ class BookingApiTests(unittest.TestCase):
             "slots": json.dumps([slot or self.slot]),
             "userForm": (io.BytesIO(b"%PDF-1.4\nTest form"), "facility-form.pdf"),
         }
+
+    def test_admin_can_publish_and_delete_facility_documents(self):
+        self.assertEqual(
+            self.client.get("/api/admin/documents").status_code, 401
+        )
+        public_documents = self.client.get("/api/documents").get_json()["items"]
+        self.assertEqual(
+            {item["id"] for item in public_documents},
+            {"legacy-cytoflex-lx", "legacy-user-charges"},
+        )
+        self.assertEqual(self.sign_in().status_code, 200)
+
+        invalid_upload = self.client.post(
+            "/api/admin/documents",
+            data={
+                "title": "Not a PDF",
+                "document": (io.BytesIO(b"<html>not a pdf</html>"), "not-a-pdf.pdf"),
+            },
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(invalid_upload.status_code, 400)
+
+        oversized_upload = self.client.post(
+            "/api/admin/documents",
+            data={
+                "title": "Oversized document",
+                "document": (
+                    io.BytesIO(b"%PDF-" + b"x" * facility_app.MAX_UPLOAD_SIZE),
+                    "oversized.pdf",
+                ),
+            },
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(oversized_upload.status_code, 400)
+        self.assertIn("10 MB", oversized_upload.get_json()["error"])
+
+        uploaded = self.client.post(
+            "/api/admin/documents",
+            data={
+                "title": "Current facility user form",
+                "description": "Complete this form before booking.",
+                "document": (
+                    io.BytesIO(b"%PDF-1.4\nTest facility document"),
+                    "current-user-form.pdf",
+                ),
+            },
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(uploaded.status_code, 201)
+        item = uploaded.get_json()["item"]
+        self.assertTrue(item["uploaded"])
+        self.assertEqual(item["title"], "Current facility user form")
+
+        public_items = self.client.get("/api/documents").get_json()["items"]
+        self.assertIn(item["id"], {document["id"] for document in public_items})
+        document_response = self.client.get(item["url"])
+        self.assertEqual(document_response.status_code, 200)
+        self.assertEqual(document_response.mimetype, "application/pdf")
+        self.assertTrue(document_response.data.startswith(b"%PDF-"))
+
+        deleted = self.client.delete(
+            f"/api/admin/documents/{item['id']}",
+            headers=self.admin_headers(),
+        )
+        self.assertEqual(deleted.status_code, 200)
+        self.assertNotIn(
+            item["id"],
+            {document["id"] for document in self.client.get("/api/documents").get_json()["items"]},
+        )
+        self.assertEqual(self.client.get(item["url"]).status_code, 404)
 
     def sign_in(self):
         response = self.client.post(

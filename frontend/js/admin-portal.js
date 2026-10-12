@@ -41,6 +41,10 @@ if (adminPortal) {
   const galleryUploadForm = adminPortal.querySelector("#admin-gallery-upload-form");
   const galleryUploadStatus = adminPortal.querySelector("#admin-gallery-upload-status");
   const galleryCancelEditButton = adminPortal.querySelector("#admin-gallery-cancel-edit");
+  const documentsList = adminPortal.querySelector("#admin-documents-list");
+  const documentsStatus = adminPortal.querySelector("#admin-documents-status");
+  const documentUploadForm = adminPortal.querySelector("#admin-document-upload-form");
+  const documentUploadStatus = adminPortal.querySelector("#admin-document-upload-status");
   const brownBearAdminLink = adminPortal.querySelector("#admin-brownbear-admin");
   const editDialog = document.querySelector("#admin-edit-booking");
   const editForm = document.querySelector("#admin-edit-form");
@@ -55,6 +59,7 @@ if (adminPortal) {
   let calendarClosures = [];
   let facilityEvents = [];
   let galleryItems = [];
+  let facilityDocuments = [];
   let pendingRemoval = null;
   let calendarFetchedAt = "";
   let selectedCalendarDate = "";
@@ -82,6 +87,7 @@ if (adminPortal) {
       bookings: ["Bookings", "Review requests, manage bookings, and sync the facility calendar."],
       events: ["Events & workshops", "Publish facility announcements and manage calendar closures."],
       gallery: ["Gallery updates", "Upload and manage workshop and event photos shown in the public Gallery tab."],
+      documents: ["Forms & documents", "Upload and manage PDFs shown on the public Forms & Resources page."],
       statistics: ["Usage statistics", "Explore monthly facility activity and demand."],
     };
     const workspace = workspaces[viewName];
@@ -102,6 +108,7 @@ if (adminPortal) {
       document.dispatchEvent(new Event("admin:statistics-opened"));
     }
     if (viewName === "gallery") void loadGallery();
+    if (viewName === "documents") void loadFacilityDocuments();
   }
 
   dashboardViewButtons.forEach(button => {
@@ -138,6 +145,8 @@ if (adminPortal) {
       ? calendarClosures.find(closure => closure.id === id)
       : kind === "gallery"
         ? galleryItems.find(galleryItem => galleryItem.id === id)
+        : kind === "document"
+          ? facilityDocuments.find(documentItem => documentItem.id === id)
         : facilityEvents.find(facilityEvent => facilityEvent.id === id);
     if (!item) {
       dashboardStatus.textContent = `This ${kind} is no longer in the list. Refresh and try again.`;
@@ -145,25 +154,30 @@ if (adminPortal) {
     }
     const isClosure = kind === "closure";
     const isGallery = kind === "gallery";
+    const isDocument = kind === "document";
     const label = isClosure
       ? item.type === "exception" ? "Exception holiday" : "Workshop holiday"
       : isGallery ? "Gallery photo"
+        : isDocument ? "Facility document"
         : item.category === "workshop" ? "Workshop" : "Facility event";
-    const dates = isGallery ? "" : item.startDate === item.endDate
+    const dates = isGallery || isDocument ? "" : item.startDate === item.endDate
       ? formatDate(item.startDate)
       : `${formatDate(item.startDate)} – ${formatDate(item.endDate)}`;
-    itemConfirmEyebrow.textContent = isClosure ? "CALENDAR CLOSURE" : isGallery ? "EVENT GALLERY" : "EVENT CONTENT";
-    itemConfirmTitle.textContent = isClosure ? "Remove this closure?" : isGallery ? "Delete this gallery photo?" : "Delete this event?";
+    itemConfirmEyebrow.textContent = isClosure ? "CALENDAR CLOSURE" : isGallery ? "EVENT GALLERY" : isDocument ? "FACILITY DOCUMENT" : "EVENT CONTENT";
+    itemConfirmTitle.textContent = isClosure ? "Remove this closure?" : isGallery ? "Delete this gallery photo?" : isDocument ? "Delete this document?" : "Delete this event?";
     itemConfirmName.textContent = isGallery
       ? item.description
+      : isDocument ? item.title
       : `${label} · ${dates} · ${isClosure ? item.remark : item.title}`;
     itemConfirmDescription.textContent = isClosure
       ? "Removing it may make the affected booking sessions available again."
       : isGallery
         ? "This photo and its description will be removed from the public Gallery tab."
+        : isDocument
+          ? "This document will be removed from the public Forms & Resources page."
         : "This event will be removed from the homepage ticker and the Events & Workshop page.";
-    itemConfirmCancelButton.textContent = isClosure ? "Keep closure" : isGallery ? "Keep photo" : "Keep event";
-    itemConfirmButton.textContent = isClosure ? "Remove closure" : isGallery ? "Delete photo" : "Delete event";
+    itemConfirmCancelButton.textContent = isClosure ? "Keep closure" : isGallery ? "Keep photo" : isDocument ? "Keep document" : "Keep event";
+    itemConfirmButton.textContent = isClosure ? "Remove closure" : isGallery ? "Delete photo" : isDocument ? "Delete document" : "Delete event";
     itemConfirmStatus.textContent = "";
     pendingRemoval = { kind, id };
     itemConfirmDialog.showModal();
@@ -175,11 +189,11 @@ if (adminPortal) {
     itemConfirmButton.disabled = true;
     itemConfirmStatus.textContent = removal.kind === "closure"
       ? "Removing closure…"
-      : removal.kind === "gallery" ? "Deleting gallery photo…" : "Deleting event…";
+      : removal.kind === "gallery" ? "Deleting gallery photo…" : removal.kind === "document" ? "Deleting document…" : "Deleting event…";
     try {
       const resource = removal.kind === "closure"
         ? "calendar-closures"
-        : removal.kind === "gallery" ? "gallery" : "events";
+        : removal.kind === "gallery" ? "gallery" : removal.kind === "document" ? "documents" : "events";
       const payload = await fetchJSON(`${apiBase}/admin/${resource}/${encodeURIComponent(removal.id)}`, {
         method: "DELETE",
       });
@@ -190,6 +204,9 @@ if (adminPortal) {
       } else if (removal.kind === "gallery") {
         await loadGallery();
         dashboardStatus.textContent = payload.warning || "Gallery photo removed from the public Gallery tab.";
+      } else if (removal.kind === "document") {
+        await loadFacilityDocuments();
+        dashboardStatus.textContent = payload.warning || "Document removed from the public Forms & Resources page.";
       } else {
         await loadFacilityEvents();
       }
@@ -583,6 +600,59 @@ if (adminPortal) {
 
   adminPortal.querySelector("#admin-gallery-refresh").addEventListener("click", () => {
     void loadGallery();
+  });
+
+  function renderFacilityDocuments() {
+    documentsList.innerHTML = facilityDocuments.length
+      ? facilityDocuments.map(item => `<article class="admin-document-row">
+          <span class="document-icon">PDF</span>
+          <div><strong>${escapeHTML(item.title)}</strong><small>${escapeHTML(item.description || item.filename || "PDF · facility document")}</small></div>
+          <a class="admin-detail-button" href="${escapeHTML(item.url)}" target="_blank" rel="noopener noreferrer">${item.uploaded ? "View PDF ↗" : "Open link ↗"}</a>
+          <button class="admin-delete-button" type="button" data-document-delete="${escapeHTML(item.id)}">Delete</button>
+        </article>`).join("")
+      : '<p class="admin-status">No facility documents are currently listed.</p>';
+  }
+
+  async function loadFacilityDocuments() {
+    documentsStatus.textContent = "Loading facility documents…";
+    try {
+      const payload = await fetchJSON(`${apiBase}/admin/documents`, { cache: "no-store" });
+      facilityDocuments = payload.items;
+      renderFacilityDocuments();
+      documentsStatus.textContent = `${facilityDocuments.length} document${facilityDocuments.length === 1 ? "" : "s"} listed`;
+    } catch (error) {
+      documentsStatus.textContent = error.message;
+    }
+  }
+
+  documentUploadForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!documentUploadForm.reportValidity()) return;
+    const submitButton = documentUploadForm.querySelector('[type="submit"]');
+    submitButton.disabled = true;
+    documentUploadStatus.textContent = "Uploading and publishing PDF…";
+    try {
+      await fetchJSON(`${apiBase}/admin/documents`, {
+        method: "POST",
+        body: new FormData(documentUploadForm),
+      });
+      documentUploadForm.reset();
+      await loadFacilityDocuments();
+      documentUploadStatus.textContent = "PDF uploaded and published on the public Forms & Resources page.";
+    } catch (error) {
+      documentUploadStatus.textContent = error.message;
+    } finally {
+      submitButton.disabled = false;
+    }
+  });
+
+  documentsList.addEventListener("click", event => {
+    const button = event.target.closest("[data-document-delete]");
+    if (button) requestManagedItemRemoval("document", button.dataset.documentDelete);
+  });
+
+  adminPortal.querySelector("#admin-documents-refresh").addEventListener("click", () => {
+    void loadFacilityDocuments();
   });
 
   function resetFacilityEventForm() {
