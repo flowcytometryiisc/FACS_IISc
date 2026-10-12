@@ -14,14 +14,16 @@ if (bookingDocumentLinks) {
       if (!response.ok) {
         throw new Error(payload.error || "Booking forms could not be loaded.");
       }
-      const inhouseForm = payload.items.find(item =>
-        /in[\s-]?house|internal/i.test(`${item.title} ${item.description} ${item.filename}`)
-      );
+      const inhouseForm = payload.items.find(item => {
+        const documentDetails = `${item.title} ${item.description} ${item.filename}`;
+        return /in[\s-]?house|internal/i.test(documentDetails)
+          || (/iisc/i.test(documentDetails) && /booking|form|user/i.test(documentDetails));
+      });
       const externalForm = payload.items.find(item =>
         /external/i.test(`${item.title} ${item.description} ${item.filename}`)
       );
       const forms = [
-        inhouseForm && { label: "In-house booking form", item: inhouseForm },
+        inhouseForm && { label: "Booking form for IISc users", item: inhouseForm },
         externalForm && { label: "External booking form", item: externalForm },
       ].filter(Boolean);
       bookingDocumentLinks.innerHTML = forms.length
