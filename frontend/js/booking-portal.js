@@ -350,9 +350,7 @@ if (bookingPortal) {
       document.querySelector("#booking-confirmation-slots").textContent =
         `${booking.slots.length} session${booking.slots.length === 1 ? "" : "s"} held while staff review your request`;
       document.querySelector("#booking-confirmation-email").textContent =
-        booking.notifications?.user?.sent
-          ? "We sent an email acknowledging your request."
-          : `Your request is saved, but the acknowledgement email was not sent: ${booking.notifications?.user?.error || "delivery status unavailable"}`;
+        booking.notifications?.user?.sent ? "We sent an email acknowledging your request." : "";
       confirmation.showModal();
       selectedSlots.clear();
       form.reset();
