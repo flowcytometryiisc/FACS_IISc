@@ -22,11 +22,16 @@ sidebar.innerHTML = `
   </a>
   <button class="menu-toggle" aria-label="Open navigation" aria-expanded="false" aria-controls="site-navigation"><span></span><span></span><span></span></button>
   <nav class="nav" id="site-navigation" aria-label="Main navigation">
-    ${sitePages.map(page => `<a href="${page.file}"${page.file === activePage.file ? ' class="active" aria-current="page"' : ""}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${page.icon}"/></svg><span>${page.label}</span></a>`).join("")}
+    ${sitePages.filter(page => page.file !== "booking.html").map(page => `<a href="${page.file}"${page.file === activePage.file ? ' class="active" aria-current="page"' : ""}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${page.icon}"/></svg><span>${page.label}</span></a>`).join("")}
   </nav>
-  <a class="sidebar-admin-link${currentFile === "admin.html" ? " active" : ""}" href="admin.html"${currentFile === "admin.html" ? ' aria-current="page"' : ""}>
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v5c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6zm-3 9 2 2 4-4"/></svg><span>Staff admin login</span>
-  </a>
+  <div class="sidebar-top-actions">
+    <a class="sidebar-book-link${currentFile === "booking.html" ? " active" : ""}" href="booking.html"${currentFile === "booking.html" ? ' aria-current="page"' : ""} aria-label="Book a slot">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v16H4zM8 3v4m8-4v4M4 10h16m-12 4h3m2 0h3m-8 4h3"/></svg><span>Book a slot</span>
+    </a>
+    <a class="sidebar-admin-link${currentFile === "admin.html" ? " active" : ""}" href="admin.html"${currentFile === "admin.html" ? ' aria-current="page"' : ""} aria-label="Staff admin login">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v5c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6zm-3 9 2 2 4-4"/></svg><span>Staff admin login</span>
+    </a>
+  </div>
   <div class="sidebar-campus" aria-hidden="true">
     <img src="assets/images/site/iis-campus.jpg" alt="">
     <span>Indian Institute<br>of Science<br><small>Bengaluru</small></span>
@@ -39,7 +44,7 @@ siteMain.className = "site-main";
 main.before(sidebar);
 main.before(siteMain);
 siteMain.append(main);
-document.body.append(sidebar.querySelector(".sidebar-admin-link"));
+document.body.append(sidebar.querySelector(".sidebar-top-actions"));
 sidebar.addEventListener("mouseenter", () => document.body.classList.add("sidebar-expanded"));
 sidebar.addEventListener("mouseleave", () => {
   if (!sidebar.matches(":focus-within")) document.body.classList.remove("sidebar-expanded");
