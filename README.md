@@ -15,7 +15,7 @@ preview; the live schedule requires the backend to be running.
 - Persistent dark navigation rail with a compact mobile menu
 - Simple research-focused homepage with direct links to detailed pages
 - Separate About, People, Instruments, Data Analysis, Forms & Resources,
-  booking portal, staff admin portal, Workshops and Contact pages
+  booking portal, staff admin portal, Workshops, Gallery and Contact pages
 - Instrument cards with analyzer/sorter filters
 - Mobile navigation with active-page and instrument-filter highlighting
 - Team portraits stored with the People page assets
@@ -37,8 +37,8 @@ preview; the live schedule requires the backend to be running.
 - Admin-managed events and workshops with editable dates, descriptions, and
   validated brochure or registration links; upcoming items appear in an
   animated homepage hero ticker and on the Events & Workshop page
-- A public Events & Workshops page gallery with admin-managed photos, event
-  names, dates, and descriptions
+- A dedicated public Gallery page with admin-managed photos, event names,
+  dates, and descriptions
 - An admin-managed Forms & Resources document workspace for publishing and
   removing PDF documents, with existing facility document links included
 - Supabase PostgreSQL and private Storage deployment path for durable hosted

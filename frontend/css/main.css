@@ -441,13 +441,8 @@ footer{padding:10px 0 8px;background:#041f40;color:#c1d0e1}
 .upcoming-workshop-note strong{color:#254968;font-size:8px}
 .upcoming-workshop-note p{margin:3px 0;color:#6b8195;font-size:7px}
 .upcoming-workshop-note a{color:#1473c8;font-size:7px;font-weight:600}
-.workshop-page-tabs{display:flex;gap:8px;margin:0 0 22px;border-bottom:1px solid #dce7f0}
-.workshop-page-tab{position:relative;padding:10px 15px;border:0;background:transparent;color:#62798f;font:700 11px Inter,Arial,sans-serif;cursor:pointer}
-.workshop-page-tab:hover,.workshop-page-tab.active{color:#126eae}
-.workshop-page-tab.active:after{position:absolute;right:10px;bottom:-1px;left:10px;height:3px;border-radius:3px 3px 0 0;background:#1680c5;content:""}
-.gallery-tab-panel[hidden]{display:none}
-.event-gallery-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));justify-items:center;gap:16px}
-.event-gallery-card{width:100%;max-width:520px;overflow:hidden;border:1px solid #e0e9f0;border-radius:13px;background:#fff;box-shadow:0 8px 22px rgba(20,55,88,.055)}
+.event-gallery-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;gap:20px}
+.event-gallery-card{width:100%;min-width:0;overflow:hidden;border:1px solid #e0e9f0;border-radius:13px;background:#fff;box-shadow:0 8px 22px rgba(20,55,88,.055)}
 .event-gallery-card img{display:block;width:100%;aspect-ratio:4/3;object-fit:contain;object-position:center;background:#f1f6fa}
 .event-gallery-card-details{display:grid;gap:5px;padding:12px 14px}
 .event-gallery-card h3{margin:0;color:#173b59;font:800 15px/1.35 Manrope,Inter,sans-serif}
@@ -1193,15 +1188,20 @@ main section[id],main [id]{scroll-margin-top:28px}
 .page-hero.hero-resources{background-image:linear-gradient(90deg,rgba(3,23,49,.88),rgba(5,32,66,.58)),url("../assets/images/site/analysis-resources.jpg")}
 .page-hero.hero-forms{background-image:linear-gradient(90deg,rgba(3,23,49,.87),rgba(4,31,64,.56)),url("../assets/images/site/research-forms.jpg")}
 .page-hero.hero-workshops{background-image:linear-gradient(90deg,rgba(3,23,49,.85),rgba(4,31,64,.52)),url("../assets/images/site/workshop-lecture.jpg")}
+.page-hero.hero-gallery{background-image:linear-gradient(90deg,rgba(3,23,49,.85),rgba(4,31,64,.52)),url("../assets/images/site/workshop-lecture.jpg")}
 .page-hero.hero-calendar{background-image:linear-gradient(90deg,rgba(3,23,49,.85),rgba(4,31,64,.55)),url("../assets/images/site/facility-calendar.jpg")}
 .page-hero.hero-booking{background-image:linear-gradient(90deg,rgba(3,23,49,.85),rgba(4,31,64,.55)),url("../assets/images/site/fluorescence-data.jpg")}
 .page-hero.hero-contact{background-image:linear-gradient(90deg,rgba(3,23,49,.84),rgba(4,31,64,.45)),url("../assets/images/site/campus-location.jpg")}
 .page-hero[class*="hero-"]:after{opacity:.16}
+@media(max-width:900px){
+  .event-gallery-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 @media(max-width:790px){
   .sidebar-brand .brand-logo{width:42px;height:42px}
-  .page-hero.hero-about,.page-hero.hero-people,.page-hero.hero-instruments,.page-hero.hero-services,.page-hero.hero-analysis,.page-hero.hero-resources,.page-hero.hero-forms,.page-hero.hero-workshops,.page-hero.hero-calendar,.page-hero.hero-booking,.page-hero.hero-contact{background-position:center;background-size:cover}
+  .page-hero.hero-about,.page-hero.hero-people,.page-hero.hero-instruments,.page-hero.hero-services,.page-hero.hero-analysis,.page-hero.hero-resources,.page-hero.hero-forms,.page-hero.hero-workshops,.page-hero.hero-gallery,.page-hero.hero-calendar,.page-hero.hero-booking,.page-hero.hero-contact{background-position:center;background-size:cover}
 }
 @media(max-width:560px){
+  .event-gallery-grid{grid-template-columns:1fr}
   .sidebar-brand .brand-logo{width:38px;height:38px}
   .sidebar-campus{min-height:82px}
   .sidebar-campus img{height:82px}

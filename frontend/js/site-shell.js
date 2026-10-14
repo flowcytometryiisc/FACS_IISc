@@ -5,8 +5,8 @@ const sitePages = [
   { file: "instruments.html", label: "Instruments", icon: "M4 4h16v16H4zM8 8h8v8H8zM2 9h2m16 0h2M2 15h2m16 0h2M9 2v2m6-2v2m-6 16v2m6-2v2" },
   { file: "booking.html", label: "Book a slot", icon: "M3 5h18v16H3zM7 3v4m10-4v4M3 10h18m5 3 5 3-5 3z" },
   { file: "workshops.html", label: "Events & Workshop", icon: "M3 5h18v16H3zM7 3v4m10-4v4M3 10h18m5 3 5 3-5 3z" },
+  { file: "gallery.html", label: "Gallery", icon: "M3 5h18v14H3zM7 15l3-3 2 2 3-4 4 5M8 9h.01" },
   { file: "forms-resources.html", label: "Forms & Resources", icon: "M6 3h8l4 4v14H6zM14 3v5h5m-9 4h6m-6 4h6" },
-  { file: "data-analysis.html", label: "Data Analysis", icon: "M4 19V5m0 14h17m-14-4 4-4 3 2 5-6" },
   { file: "contact.html", label: "Contact", icon: "M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Zm-5 0a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" }
 ];
 
@@ -61,7 +61,7 @@ siteMain.insertAdjacentHTML("beforeend", `
       <a class="footer-brand" href="index.html"><img class="footer-seal" src="assets/images/site/iisc-seal.jpg" alt="Indian Institute of Science seal"><span class="footer-brand-copy"><strong>Indian Institute of Science</strong><small>Bengaluru</small></span></a>
       <nav class="footer-links" aria-label="Footer quick links">
         <section class="footer-link-group"><h2>Facility</h2><a href="about.html">About</a><a href="people.html">People</a><a href="instruments.html">Instruments</a></section>
-        <section class="footer-link-group"><h2>Bookings &amp; resources</h2><a href="booking.html">Book a slot</a><a href="workshops.html">Events &amp; Workshop</a><a href="forms-resources.html">Forms &amp; Resources</a><a href="data-analysis.html">Data Analysis</a></section>
+        <section class="footer-link-group"><h2>Bookings &amp; resources</h2><a href="booking.html">Book a slot</a><a href="workshops.html">Events &amp; Workshop</a><a href="gallery.html">Gallery</a><a href="forms-resources.html">Forms &amp; Resources</a></section>
         <section class="footer-link-group"><h2>Contact &amp; staff</h2><a href="contact.html">Contact</a><a href="admin.html">Staff admin login</a></section>
       </nav>
     </div>

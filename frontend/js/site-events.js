@@ -110,33 +110,6 @@ if (homeEventTicker || upcomingEventsSection || eventGallery) {
     }
   }
 
-  const workshopsTab = document.querySelector("#workshops-tab");
-  const galleryTab = document.querySelector("#gallery-tab");
-  if (workshopsTab && galleryTab) {
-    function selectWorkshopTab(gallerySelected) {
-      workshopsTab.setAttribute("aria-selected", String(!gallerySelected));
-      galleryTab.setAttribute("aria-selected", String(gallerySelected));
-      workshopsTab.classList.toggle("active", !gallerySelected);
-      galleryTab.classList.toggle("active", gallerySelected);
-      document.querySelector("#workshops-tab-panel").hidden = gallerySelected;
-      document.querySelector("#gallery-tab-panel").hidden = !gallerySelected;
-    }
-
-    document.querySelectorAll(".workshop-page-tab").forEach(tab => {
-      tab.addEventListener("click", () => {
-        const gallerySelected = tab.id === "gallery-tab";
-        if (galleryTab.getAttribute("aria-selected") === String(gallerySelected)) return;
-        selectWorkshopTab(gallerySelected);
-        const tabHash = gallerySelected ? "#gallery" : "";
-        window.history.pushState(null, "", `${window.location.pathname}${window.location.search}${tabHash}`);
-      });
-    });
-    window.addEventListener("popstate", () => {
-      selectWorkshopTab(window.location.hash === "#gallery");
-    });
-    selectWorkshopTab(window.location.hash === "#gallery");
-  }
-
   void loadFacilityEvents();
   void loadWorkshopArchive();
   void loadEventGallery();
